@@ -20,7 +20,7 @@ func main() {
 func run() error {
 	storage := storage.NewMemStorage()
 	mux := http.NewServeMux()
-	mux.Handle(`/update/`, handler.Middleware(handler.MakeUpdateHandler(storage)))
+	mux.Handle(`/update/`, handler.Middleware(handler.UpdateHandler(storage)))
 
 	fmt.Println("Starting HTTP server on ", host)
 	err := http.ListenAndServe(host, mux)

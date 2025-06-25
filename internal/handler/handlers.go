@@ -22,7 +22,7 @@ func Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func MakeUpdateHandler(storage *st.MemStorage) http.HandlerFunc {
+func UpdateHandler(storage *st.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(r.URL.Path, "/")
 

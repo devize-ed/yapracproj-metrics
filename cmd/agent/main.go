@@ -20,7 +20,7 @@ var (
 )
 
 func main() {
-	
+
 	mStorage := &agent.AgentStorage{}
 	client := &http.Client{}
 
@@ -36,10 +36,10 @@ func main() {
 			for i := 0; i < val.NumField(); i++ {
 				metric := typ.Field(i).Name
 				value := val.Field(i)
-				fmt.Printf("%s = %v\n", metric, value)
+				// fmt.Printf("%s = %v\n", metric, value)
 				agent.SendMetric(client, metric, fmt.Sprint(value), host)
 			}
-			fmt.Println("==========================================")
+			// fmt.Println("==========================================")
 			timer = 0
 		}
 	}
