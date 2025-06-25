@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/storage"
 )
 
 const host = ":8080"
@@ -15,9 +18,9 @@ func main() {
 }
 
 func run() error {
-	storage := NewMemStorage()
+	storage := storage.NewMemStorage()
 	mux := http.NewServeMux()
-	mux.Handle(`/update/`, middleware(makeUpdateHandler(storage)))
+	mux.Handle(`/update/`, handler.Middleware(handler.MakeUpdateHandler(storage)))
 
 	fmt.Println("Starting HTTP server on ", host)
 	err := http.ListenAndServe(host, mux)

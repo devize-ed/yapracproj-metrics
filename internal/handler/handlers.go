@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"fmt"
@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	st "github.com/devize-ed/yapracproj-metrics.git/internal/repository/storage"
 )
 
-func middleware(next http.Handler) http.Handler {
+func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Received update request: ", r.URL.Path)
 		if r.Method != http.MethodPost {
@@ -21,9 +22,10 @@ func middleware(next http.Handler) http.Handler {
 	})
 }
 
-func makeUpdateHandler(storage *MemStorage) http.HandlerFunc {
+func MakeUpdateHandler(storage *st.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(r.URL.Path, "/")
+
 		// 0 = ""
 		// 1 = "update"
 		// 2 = "<ТИП_МЕТРИКИ>"

@@ -1,4 +1,4 @@
-package main
+package storage
 
 type MemStorage struct {
 	gauge   map[string]float64
