@@ -30,11 +30,11 @@ func makeUpdateHandler(storage *MemStorage) http.HandlerFunc {
 		// 3 = "<ИМЯ_МЕТРИКИ>"
 		// 4 = "<ЗНАЧЕНИЕ_МЕТРИКИ>"
 
-		if len(parts) != 5 {
-			fmt.Println("Request invalid URL: ", r.URL.Path)
-			http.Error(w, "Invalid URL", http.StatusBadRequest)
-			return
-		}
+		// if len(parts) != 5 {
+		// 	fmt.Println("Request invalid URL: ", r.URL.Path)
+		// 	http.Error(w, "Invalid URL", http.StatusBadRequest)
+		// 	return
+		// }
 		metricType, metricName, metricValue := parts[2], parts[3], parts[4]
 
 		if metricName == "" {
