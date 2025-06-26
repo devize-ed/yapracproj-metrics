@@ -77,7 +77,7 @@ func TestListAllHandler(t *testing.T) {
 		expectedCode int
 		expectedBody string
 	}{
-		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.500000\ntestGauge2 = 10.500000"},
+		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.5\ntestGauge2 = 10.5"},
 	}
 
 	for _, tt := range tests {
@@ -105,7 +105,7 @@ func TestGetMetricHandler(t *testing.T) {
 		expectedBody string
 	}{
 		{"/value/counter/testCounter", http.StatusOK, "5"},
-		{"/value/gauge/testGauge1", http.StatusOK, "10.500000"},
+		{"/value/gauge/testGauge1", http.StatusOK, "10.5"},
 		{"/value/gauge/", http.StatusNotFound, "404 page not found"},
 		{"/value/gauge/unknownMetric", http.StatusNotFound, "metric not found"},
 	}

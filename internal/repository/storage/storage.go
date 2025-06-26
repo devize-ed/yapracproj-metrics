@@ -1,6 +1,6 @@
 package storage
 
-import "fmt"
+import "strconv"
 
 type MemStorage struct {
 	gauge   map[string]float64
@@ -35,10 +35,10 @@ func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 func (ms *MemStorage) ListAll() map[string]string {
 	result := make(map[string]string)
 	for k, v := range ms.gauge {
-		result[k] = fmt.Sprintf("%f", v)
+		result[k] = strconv.FormatFloat(v, 'f', -1, 64)
 	}
 	for k, v := range ms.counter {
-		result[k] = fmt.Sprintf("%d", v)
+		result[k] = strconv.FormatInt(v, 10)
 	}
 	return result
 }
