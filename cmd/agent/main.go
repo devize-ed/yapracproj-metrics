@@ -18,11 +18,14 @@ func main() {
 	mStorage := &agent.AgentStorage{}
 	client := resty.New()
 
+	timePoolInterval := time.Duration(pollInterval) * time.Second
+	timeReportInterval := time.Duration(reportInterval) * time.Second
+
 	for {
 		mStorage.CollectMetrics()
-		time.Sleep(popollInterval)
-		timer += popollInterval
-		if timer <= reportInterval {
+		time.Sleep(timePoolInterval)
+		timer += timePoolInterval
+		if timer <= timeReportInterval {
 			fmt.Println("timer == reportInterval, reporting metrics...")
 			val := reflect.ValueOf(mStorage).Elem()
 			typ := reflect.TypeOf(mStorage).Elem()
