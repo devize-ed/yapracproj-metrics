@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
@@ -15,6 +16,7 @@ func UpdateMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricValue := chi.URLParam(r, "metricValue")
+		metricType := chi.URLParam(r, "metricType")
 
 		switch chi.URLParam(r, "metricType") {
 		case models.Counter:
@@ -38,12 +40,12 @@ func UpdateMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 			log.Printf("Gauge %s updated to %f\n", metricName, val)
 
 		default:
-			log.Println("Request invalid metric type: ", r.URL.Path)
+			log.Println("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
 
-		log.Println("Writing response: ", r.URL.Path)
+		log.Println("Writing response: ", http.StatusOK)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
@@ -55,6 +57,7 @@ func GetMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
+		log.Println("GetMetricHandler called with metricName:", metricName, "and metricType:", metricType)
 
 		var (
 			val []byte
@@ -84,7 +87,7 @@ func GetMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 			}
 
 		default:
-			log.Println("Request invalid metric type: ", r.URL.Path)
+			log.Println("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
@@ -99,9 +102,17 @@ func ListAllHandler(storage *st.MemStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metrics := storage.ListAll()
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		for _, k := range metrics {
-			fmt.Fprintf(w, "%s:%s\n", k, metrics[k])
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		// for metric, value := range metrics {
+		// 	fmt.Fprintf(w, "%s = %s\n", metric, value)
+		// }
+		keys := make([]string, 0, len(metrics))
+		for k := range metrics {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(w, "%s = %s\n", k, metrics[k])
 		}
 	}
 }

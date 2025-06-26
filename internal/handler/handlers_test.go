@@ -1,134 +1,120 @@
 package handler
 
-// import (
-// 	"io"
-// 	"net/http"
-// 	"net/http/httptest"
-// 	"testing"
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-// 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/storage"
-// 	"github.com/stretchr/testify/assert"
-// )
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/storage"
+	"github.com/go-chi/chi"
+	"github.com/go-resty/resty/v2"
+	"github.com/stretchr/testify/assert"
+)
 
-// func TestUpdateHandler(t *testing.T) {
-// 	type want struct {
-// 		contentType string
-// 		statusCode  int
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		request string
-// 		want    want
-// 	}{
-// 		{
-// 			name:    "successful update of counter",
-// 			request: "/update/counter/testMetric/123",
-// 			want: want{
-// 				contentType: "text/plain; charset=utf-8",
-// 				statusCode:  200,
-// 			},
-// 		},
-// 		{
-// 			name:    "successful update of gauge",
-// 			request: "/update/gauge/testMetric/123",
-// 			want: want{
-// 				contentType: "text/plain; charset=utf-8",
-// 				statusCode:  200,
-// 			},
-// 		},
-// 		{
-// 			name:    "empty metric name",
-// 			request: "/update/gauge/",
-// 			want: want{
-// 				contentType: "text/plain; charset=utf-8",
-// 				statusCode:  404,
-// 			},
-// 		},
-// 		{
-// 			name:    "incorrect mettric type",
-// 			request: "/update/incorrectMettricType/testMetric/123",
-// 			want: want{
-// 				contentType: "text/plain; charset=utf-8",
-// 				statusCode:  400,
-// 			},
-// 		},
-// 		{
-// 			name:    "empty metric name",
-// 			request: "/update/counter/testMetric/stringValue",
-// 			want: want{
-// 				contentType: "text/plain; charset=utf-8",
-// 				statusCode:  400,
-// 			},
-// 		},
-// 	}
+func testMemoryStorage(ms *storage.MemStorage) {
+	ms.AddCounter("testCounter", 5)
+	ms.SetGauge("testGauge1", 10.5)
+	ms.SetGauge("testGauge2", 10.5)
+}
 
-// 	ms := storage.NewMemStorage()
+func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp *resty.Response) {
+	req := resty.New().R()
+	req.Method = method
+	req.URL = srv.URL + path
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			request := httptest.NewRequest(http.MethodPost, tt.request, nil)
-// 			w := httptest.NewRecorder()
-// 			h := http.HandlerFunc(UpdateHandler(ms))
-// 			h(w, request)
-// 			res := w.Result()
-// 			defer res.Body.Close()
-// 			io.Copy(io.Discard, res.Body)
+	resp, err := req.Send()
+	assert.NoError(t, err, "error making HTTP request")
+	return resp
+}
 
-// 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
-// 			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
+func TestUpdateHandler(t *testing.T) {
+	ms := storage.NewMemStorage()
+	r := chi.NewRouter()
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", UpdateMetricHandler(ms))
 
-// 		})
-// 	}
-// }
+	srv := httptest.NewServer(r)
+	defer srv.Close()
 
-// func TestMiddleware(t *testing.T) {
-// 	type want struct {
-// 		statusCode int
-// 	}
-// 	tests := []struct {
-// 		name   string
-// 		method string
-// 		want   want
-// 	}{
-// 		{
-// 			name:   "POST method",
-// 			method: http.MethodPost,
-// 			want: want{
-// 				statusCode: http.StatusOK,
-// 			},
-// 		},
-// 		{
-// 			name:   "GET method",
-// 			method: http.MethodGet,
-// 			want: want{
-// 				statusCode: http.StatusMethodNotAllowed,
-// 			},
-// 		},
-// 		{
-// 			name:   "DELETE method",
-// 			method: http.MethodDelete,
-// 			want: want{
-// 				statusCode: http.StatusMethodNotAllowed,
-// 			},
-// 		},
-// 	}
+	var tests = []struct {
+		url                 string
+		expectedContentType string
+		expectedCode        int
+	}{
+		{"/update/counter/testCounter/123", "text/plain; charset=utf-8", http.StatusOK},
+		{"/update/gauge/testGauge/123", "text/plain; charset=utf-8", http.StatusOK},
+		{"/update/gauge/", "text/plain; charset=utf-8", http.StatusNotFound},
+		{"/update/incorrectMetricType/testMetric/123", "text/plain; charset=utf-8", http.StatusBadRequest},
+		{"/update/counter/testCounter/stringValue", "text/plain; charset=utf-8", http.StatusBadRequest},
+	}
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL + tt.url
+			fmt.Println("Request URL:", req.URL)
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
 
-// 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 				w.WriteHeader(http.StatusOK)
-// 			})
+			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
+			assert.Equal(t, tt.expectedContentType, resp.Header().Get("Content-Type"), "Response content type didn't match expected")
+		})
+	}
+}
 
-// 			req := httptest.NewRequest(tt.method, "/update/counter/testMetric/123", nil)
-// 			w := httptest.NewRecorder()
+func TestListAllHandler(t *testing.T) {
+	ms := storage.NewMemStorage()
+	testMemoryStorage(ms)
 
-// 			Middleware(next).ServeHTTP(w, req)
-// 			res := w.Result()
-// 			defer res.Body.Close()
-// 			io.Copy(io.Discard, res.Body)
+	r := chi.NewRouter()
+	r.Get("/", ListAllHandler(ms))
+	srv := httptest.NewServer(r)
+	defer srv.Close()
 
-// 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
-// 		})
-// 	}
-// }
+	var tests = []struct {
+		url          string
+		expectedCode int
+		expectedBody string
+	}{
+		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.500000\ntestGauge2 = 10.500000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			resp := testRequest(t, srv, http.MethodGet, tt.url)
+			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
+			assert.Equal(t, tt.expectedBody, resp.String(), "Response body didn't match expected")
+		})
+	}
+}
+
+func TestGetMetricHandler(t *testing.T) {
+	ms := storage.NewMemStorage()
+	testMemoryStorage(ms)
+
+	r := chi.NewRouter()
+	r.Get("/value/{metricType}/{metricName}", GetMetricHandler(ms))
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	var tests = []struct {
+		url          string
+		expectedCode int
+		expectedBody string
+	}{
+		{"/value/counter/testCounter", http.StatusOK, "5"},
+		{"/value/gauge/testGauge1", http.StatusOK, "10.500000"},
+		{"/value/gauge/", http.StatusNotFound, "404 page not found"},
+		{"/value/gauge/unknownMetric", http.StatusNotFound, "metric not found"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			resp := testRequest(t, srv, http.MethodGet, tt.url)
+			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
+			assert.Equal(t, tt.expectedBody, resp.String(), "Response body didn't match expected")
+		})
+	}
+}
