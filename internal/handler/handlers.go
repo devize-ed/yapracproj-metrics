@@ -69,7 +69,7 @@ func GetMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 			var got int64
 			got, ok = storage.GetCounter(metricName)
 			if ok {
-				val = []byte(fmt.Sprintf("%d", got))
+				val = []byte(strconv.FormatInt(got, 10))
 			} else {
 				log.Println("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
@@ -79,7 +79,7 @@ func GetMetricHandler(storage *st.MemStorage) http.HandlerFunc {
 			var got float64
 			got, ok = storage.GetGauge(metricName)
 			if ok {
-				val = []byte(fmt.Sprintf("%f", got))
+				val = []byte(strconv.FormatFloat(got, 'f', -1, 64))
 			} else {
 				log.Println("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
