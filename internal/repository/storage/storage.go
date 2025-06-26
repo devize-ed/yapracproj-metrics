@@ -1,5 +1,7 @@
 package storage
 
+import "fmt"
+
 type MemStorage struct {
 	gauge   map[string]float64
 	counter map[string]int64
@@ -28,4 +30,15 @@ func (ms *MemStorage) AddCounter(name string, delta int64) {
 func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 	val, ok := ms.counter[name]
 	return val, ok
+}
+
+func (ms *MemStorage) ListAll() map[string]string {
+	result := make(map[string]string)
+	for k, v := range ms.gauge {
+		result[k] = fmt.Sprintf("%f", v)
+	}
+	for k, v := range ms.counter {
+		result[k] = fmt.Sprintf("%d", v)
+	}
+	return result
 }

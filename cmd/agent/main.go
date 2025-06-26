@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/agent"
+	"github.com/go-resty/resty/v2"
 )
 
 const (
@@ -22,7 +22,7 @@ var (
 func main() {
 
 	mStorage := &agent.AgentStorage{}
-	client := &http.Client{}
+	client := resty.New()
 
 	for {
 		mStorage.CollectMetrics()

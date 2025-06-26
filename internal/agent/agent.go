@@ -2,50 +2,38 @@ package agent
 
 import (
 	"fmt"
-	"io"
+	"log"
 	"math/rand/v2"
-	"net/http"
 	"runtime"
 
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	"github.com/go-resty/resty/v2"
 )
 
-func SendMetric(client *http.Client, metric, value, host string) error {
-	fmt.Println("SendMetric requested for metric: ", metric, " = ", value)
+func SendMetric(client *resty.Client, metric, value, host string) error {
+
+	log.Println("SendMetric requested for metric: ", metric, " = ", value)
 	var mtype = models.Gauge
 	if metric == "PollCount" {
 		mtype = models.Counter
 	}
 
 	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", host, mtype, metric, value)
-	request, err := http.NewRequest(http.MethodPost, endpoint, nil)
+
+	resp, err := client.R().
+		SetHeader("Content-Type", "text/plain; charset=utf-8").
+		Post(endpoint)
 	if err != nil {
-		fmt.Println("Error creating POST request for ", metric, ": ", err)
+		log.Println("Error sending ", metric, ": ", err)
 		return err
 	}
 
-	request.Header.Add("Content-Type", "text/plain; charset=utf-8")
-
-	fmt.Println("Sending metric to ", endpoint)
-	response, err := client.Do(request)
-	if err != nil {
-		fmt.Println("Error sending ", metric, ": ", err)
-		return err
-	}
-
-	fmt.Println("Response status-code: ", response.Status)
-
-	defer response.Body.Close()
-	_, err = io.Copy(io.Discard, response.Body)
-	if err != nil {
-		fmt.Println("Error discarding response body: ", err)
-		return err
-	}
+	log.Println("Response status-code: ", resp.StatusCode())
 	return nil
 }
 
 func (m *AgentStorage) CollectMetrics() {
-	fmt.Println("Collecting metrics...")
+	log.Println("Collecting metrics...")
 
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
@@ -81,5 +69,5 @@ func (m *AgentStorage) CollectMetrics() {
 	m.PollCount++
 	m.RandomValue = rand.Float64()
 
-	fmt.Println("All metrics collected")
+	log.Println("All metrics collected")
 }
