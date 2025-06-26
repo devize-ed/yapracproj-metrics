@@ -9,26 +9,20 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-const (
-	host           = "localhost:8080"
-	popollInterval = 2
-	reportInterval = 10
-)
-
 var (
-	timer = 0
+	timer = 0 * time.Second
 )
 
 func main() {
-
+	parseFlags()
 	mStorage := &agent.AgentStorage{}
 	client := resty.New()
 
 	for {
 		mStorage.CollectMetrics()
-		time.Sleep(popollInterval * time.Second)
+		time.Sleep(popollInterval)
 		timer += popollInterval
-		if timer == reportInterval {
+		if timer <= reportInterval {
 			fmt.Println("timer == reportInterval, reporting metrics...")
 			val := reflect.ValueOf(mStorage).Elem()
 			typ := reflect.TypeOf(mStorage).Elem()

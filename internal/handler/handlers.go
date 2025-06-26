@@ -103,9 +103,6 @@ func ListAllHandler(storage *st.MemStorage) http.HandlerFunc {
 		metrics := storage.ListAll()
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		// for metric, value := range metrics {
-		// 	fmt.Fprintf(w, "%s = %s\n", metric, value)
-		// }
 		keys := make([]string, 0, len(metrics))
 		for k := range metrics {
 			keys = append(keys, k)

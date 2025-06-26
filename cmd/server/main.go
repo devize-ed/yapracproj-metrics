@@ -11,9 +11,8 @@ import (
 	"github.com/go-chi/chi/middleware"
 )
 
-const host = ":8080"
-
 func main() {
+	parseFlags()
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
