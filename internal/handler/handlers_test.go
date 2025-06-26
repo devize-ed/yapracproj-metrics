@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,10 +70,12 @@ func TestUpdateHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			h := http.HandlerFunc(UpdateHandler(ms))
 			h(w, request)
-			result := w.Result()
+			res := w.Result()
+			defer res.Body.Close()
+			io.Copy(io.Discard, res.Body)
 
-			assert.Equal(t, tt.want.statusCode, result.StatusCode)
-			assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
+			assert.Equal(t, tt.want.statusCode, res.StatusCode)
+			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
 
 		})
 	}
@@ -121,8 +124,9 @@ func TestMiddleware(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			Middleware(next).ServeHTTP(w, req)
-
 			res := w.Result()
+			defer res.Body.Close()
+			io.Copy(io.Discard, res.Body)
 
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 		})
