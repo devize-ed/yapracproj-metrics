@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/storage"
+	storage "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/go-chi/chi"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"

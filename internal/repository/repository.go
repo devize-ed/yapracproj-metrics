@@ -1,12 +1,22 @@
-package storage
+package repository
 
 import "strconv"
 
+type Repository interface {
+	SetGauge(name string, value float64)
+	GetGauge(name string) (float64, bool)
+	SetCounter(name string, value int64)
+	GetCounter(name string) (int64, bool)
+	ListAll()
+}
+
+// MemStorage is the in-memory server storage for the metrics
 type MemStorage struct {
 	gauge   map[string]float64
 	counter map[string]int64
 }
 
+// MemStorage constructor
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		gauge:   make(map[string]float64),
@@ -14,6 +24,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
+// Methods for acting the storage
 func (ms *MemStorage) SetGauge(name string, value float64) {
 	ms.gauge[name] = value
 }
@@ -32,6 +43,7 @@ func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 	return val, ok
 }
 
+// Get all the saved metrics from the storage and return them and values as strings
 func (ms *MemStorage) ListAll() map[string]string {
 	result := make(map[string]string)
 	for k, v := range ms.gauge {
