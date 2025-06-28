@@ -20,7 +20,7 @@ type AgentConfig struct {
 func GetServerConfig() ServerConfig {
 	cfg := ServerConfig{}
 
-	flag.StringVar(&cfg.Host, "addr", "localhost:8080", "address of HTTP server")
+	flag.StringVar(&cfg.Host, "a", "localhost:8080", "address of HTTP server")
 	flag.Parse()
 
 	return cfg
