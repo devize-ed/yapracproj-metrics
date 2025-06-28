@@ -4,13 +4,65 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"reflect"
 	"runtime"
+	"time"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-resty/resty/v2"
 )
 
-// SendMetric sends a metric to the server
+// holds the client, storage and configuration for the agent
+type Agent struct {
+	client  *resty.Client
+	storage *AgentStorage
+	config  config.AgentConfig
+}
+
+// initializes a new Agent instance with the provided client and cfg
+func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
+	return &Agent{
+		client:  client,
+		storage: &AgentStorage{},
+		config:  config,
+	}
+}
+
+func (a *Agent) Run() error {
+	// convert the interval values to time.Duration
+	timePollInterval := time.Duration(a.config.PollInterval) * time.Second
+	timeReportInterval := time.Duration(a.config.ReportInterval) * time.Second
+
+	// set up the ticker for polling and reporting
+	pollTicker := time.NewTicker(timePollInterval)
+	defer pollTicker.Stop()
+	reportTicker := time.NewTicker(timeReportInterval)
+	defer reportTicker.Stop()
+
+	// start agent loop
+	for {
+		select {
+		case <-pollTicker.C: // collect metrics at the polling interval
+			a.storage.CollectMetrics()
+		case <-reportTicker.C: // send metrics at the reporting interval
+			fmt.Println("Reporting metrics...")
+
+			// iterate over the agent storage and send metrics to the server
+			val := reflect.ValueOf(a.storage).Elem()
+			typ := reflect.TypeOf(a.storage).Elem()
+
+			for i := 0; i < val.NumField(); i++ {
+				metric := typ.Field(i).Name
+				value := val.Field(i)
+				// fmt.Printf("%s = %v\n", metric, value)
+				SendMetric(a.client, metric, fmt.Sprint(value), a.config.Host)
+			}
+		}
+	}
+}
+
+// Sends a metric to the server
 func SendMetric(client *resty.Client, metric, value, host string) error {
 
 	log.Println("SendMetric requested for metric: ", metric, " = ", value)

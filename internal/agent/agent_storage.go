@@ -1,5 +1,6 @@
 package agent
 
+// struct to hold the metrics collected by the agent
 type AgentStorage struct {
 	// from runtime.MemStats
 	// type gauge

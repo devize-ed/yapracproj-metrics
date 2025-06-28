@@ -2,14 +2,6 @@ package repository
 
 import "strconv"
 
-type Repository interface {
-	SetGauge(name string, value float64)
-	GetGauge(name string) (float64, bool)
-	SetCounter(name string, value int64)
-	GetCounter(name string) (int64, bool)
-	ListAll()
-}
-
 // MemStorage is the in-memory server storage for the metrics
 type MemStorage struct {
 	gauge   map[string]float64

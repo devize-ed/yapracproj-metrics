@@ -30,8 +30,10 @@ func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp 
 
 func TestUpdateHandler(t *testing.T) {
 	ms := storage.NewMemStorage()
+	h := NewHandler(ms)
+
 	r := chi.NewRouter()
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", UpdateMetricHandler(ms))
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
@@ -65,10 +67,11 @@ func TestUpdateHandler(t *testing.T) {
 
 func TestListAllHandler(t *testing.T) {
 	ms := storage.NewMemStorage()
+	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
-	r.Get("/", ListAllHandler(ms))
+	r.Get("/", h.ListMetricsHandler())
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -91,10 +94,11 @@ func TestListAllHandler(t *testing.T) {
 
 func TestGetMetricHandler(t *testing.T) {
 	ms := storage.NewMemStorage()
+	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
-	r.Get("/value/{metricType}/{metricName}", GetMetricHandler(ms))
+	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
