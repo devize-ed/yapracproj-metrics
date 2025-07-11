@@ -21,13 +21,15 @@ func main() {
 func run() error {
 	ms := st.NewMemStorage() // init the memory storage for metrics
 	h := handler.NewHandler(ms)
-	cfg := config.GetServerConfig() // call the function to parse cl flags
-
+	cfg, err := config.GetServerConfig() // call the function to get server configuration
+	if err != nil {
+		return fmt.Errorf("failed to get server config: %w", err)
+	}
 	srv := server.NewServer(cfg, h) // create a new server with the configuration and handler
 
 	// loging the address and starting the server
 	log.Println("Starting HTTP server on ", cfg.Host)
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 
 	return fmt.Errorf("failed to start HTTP server: %w", err)
 }

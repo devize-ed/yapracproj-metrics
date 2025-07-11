@@ -9,8 +9,11 @@ import (
 )
 
 func main() {
-	cfg := config.GetAgentConfig() // call the function to parse cl flags
-	client := resty.New()          // init client
+	cfg, err := config.GetAgentConfig() // call the function to get agent configuration
+	if err != nil {
+		log.Fatal("Failed to get agent config:", err)
+	}
+	client := resty.New() // init client
 
 	a := agent.NewAgent(client, cfg) // create a new agent instance
 	a.Run()                          // start the agent to collect and report metrics
