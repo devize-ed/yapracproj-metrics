@@ -2,11 +2,11 @@ package handler
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-chi/chi"
 )
@@ -41,7 +41,7 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 		// handle different metric types, if unkown -> response as http.StatusBadRequest
 		switch chi.URLParam(r, "metricType") {
 		case models.Counter:
-			log.Println("Counter:", metricName, metricValue)
+			logger.Log.Debug("Counter:", metricName, metricValue)
 			// convert string value from url and save in the storage
 			val, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
@@ -49,10 +49,10 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				return
 			}
 			h.storage.AddCounter(metricName, val)
-			log.Printf("Counter %s increased by %d\n", metricName, val)
+			logger.Log.Debugf("Counter %s increased by %d\n", metricName, val)
 
 		case models.Gauge:
-			log.Println("Gauge", metricName, metricValue)
+			logger.Log.Debug("Gauge", metricName, metricValue)
 			// convert string value from url and save in the storage
 			val, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
@@ -60,20 +60,17 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				return
 			}
 			h.storage.SetGauge(metricName, val)
-			log.Printf("Gauge %s updated to %f\n", metricName, val)
+			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, val)
 
 		default:
 			// if metric type is unknown, return http.StatusBadRequest
-			log.Println("Request invalid metric type: ", metricType)
+			logger.Log.Debug("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
 
 		// write response
-		log.Println("Writing response: ", http.StatusOK)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-
 	}
 
 }
@@ -100,7 +97,7 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			if ok {
 				val = []byte(strconv.FormatInt(got, 10))
 			} else {
-				log.Println("Requested metric not found: ", r.URL.Path)
+				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
@@ -111,21 +108,20 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			if ok {
 				val = []byte(strconv.FormatFloat(got, 'f', -1, 64))
 			} else {
-				log.Println("Requested metric not found: ", r.URL.Path)
+				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
 
 		default:
 			// if metric type is unknown, return http.StatusBadRequest
-			log.Println("Request invalid metric type: ", metricType)
+			logger.Log.Error("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
 
 		// write response
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
 		w.Write(val)
 	}
 }
