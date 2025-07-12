@@ -2,13 +2,13 @@ package agent
 
 import (
 	"fmt"
-	"log"
 	"math/rand/v2"
 	"reflect"
 	"runtime"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-resty/resty/v2"
 )
@@ -46,7 +46,7 @@ func (a *Agent) Run() error {
 		case <-pollTicker.C: // collect metrics at the polling interval
 			a.storage.CollectMetrics()
 		case <-reportTicker.C: // send metrics at the reporting interval
-			fmt.Println("Reporting metrics...")
+			logger.Log.Debug("Reporting metrics...")
 
 			// iterate over the agent storage and send metrics to the server
 			val := reflect.ValueOf(a.storage).Elem()
@@ -65,7 +65,7 @@ func (a *Agent) Run() error {
 // Sends a metric to the server
 func SendMetric(client *resty.Client, metric, value, host string) error {
 
-	log.Println("SendMetric requested for metric: ", metric, " = ", value)
+	logger.Log.Debug("SendMetric requested for metric: ", metric, " = ", value)
 
 	// set the metric type as gauge by default, change it for counter if metric == "PollCount"
 	var mtype = models.Gauge
@@ -79,18 +79,18 @@ func SendMetric(client *resty.Client, metric, value, host string) error {
 		SetHeader("Content-Type", "text/plain; charset=utf-8").
 		Post(endpoint)
 	if err != nil {
-		log.Println("Error sending ", metric, ": ", err)
+		logger.Log.Error("Error sending ", metric, ": ", err)
 		return err
 	}
 
 	// logging the response status code
-	log.Println("Response status-code: ", resp.StatusCode())
+	logger.Log.Debug("Response status-code: ", resp.StatusCode())
 	return nil
 }
 
 // Metrics collector methods
 func (m *AgentStorage) CollectMetrics() {
-	log.Println("Collecting metrics...")
+	logger.Log.Debug("Collecting metrics...")
 
 	// read the metrics from the runtime package
 	var stats runtime.MemStats
@@ -128,5 +128,5 @@ func (m *AgentStorage) CollectMetrics() {
 	m.PollCount++                  // increment the poll count
 	m.RandomValue = rand.Float64() // adda random value to the metrics
 
-	log.Println("All metrics collected")
+	logger.Log.Debug("All metrics collected")
 }
