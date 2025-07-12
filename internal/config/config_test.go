@@ -20,7 +20,8 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: []string{"ADDRESS", ":8081"},
 			args:    []string{"-a=:7070"},
 			expectedConfig: ServerConfig{
-				Host: ":8081",
+				Host:     ":8081",
+				LogLevel: "debug",
 			},
 		},
 		{
@@ -28,7 +29,8 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: []string{},
 			args:    []string{"-a=:7070"},
 			expectedConfig: ServerConfig{
-				Host: ":7070",
+				Host:     ":7070",
+				LogLevel: "debug",
 			},
 		},
 		{
@@ -36,7 +38,8 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: []string{},
 			args:    []string{},
 			expectedConfig: ServerConfig{
-				Host: "localhost:8080",
+				Host:     "localhost:8080",
+				LogLevel: "debug",
 			},
 		},
 	}
@@ -70,12 +73,14 @@ func TestGetAgentConfig(t *testing.T) {
 				"ADDRESS":         ":8081",
 				"REPORT_INTERVAL": "5",
 				"POLL_INTERVAL":   "1",
+				"LOG_LEVEL":       "error",
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10"},
 			expectedConfig: AgentConfig{
 				Host:           ":8081",
 				ReportInterval: 5,
 				PollInterval:   1,
+				LogLevel:       "error",
 			},
 		},
 		{
@@ -86,6 +91,7 @@ func TestGetAgentConfig(t *testing.T) {
 				Host:           ":7070",
 				ReportInterval: 5,
 				PollInterval:   1,
+				LogLevel:       "debug",
 			},
 		},
 		{
@@ -96,6 +102,7 @@ func TestGetAgentConfig(t *testing.T) {
 				Host:           ":8080",
 				ReportInterval: 10,
 				PollInterval:   2,
+				LogLevel:       "debug",
 			},
 		},
 	}

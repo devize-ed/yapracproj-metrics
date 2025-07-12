@@ -29,7 +29,7 @@ func GetServerConfig() (ServerConfig, error) {
 		return cfg, err
 	}
 	if cfg.Host == "" {
-		logger.Log.Info("Using flag:", cfg.Host)
+		logger.Log.Debug("Using flag:", cfg.Host)
 		flag.StringVar(&cfg.Host, "a", "localhost:8080", "address of HTTP server")
 	}
 	flag.Parse()
@@ -44,15 +44,15 @@ func GetAgentConfig() (AgentConfig, error) {
 		return cfg, err
 	}
 	if cfg.Host == "" {
-		logger.Log.Info("Using flag:", cfg.Host)
+		logger.Log.Debug("Using flag:", cfg.Host)
 		flag.StringVar(&cfg.Host, "a", ":8080", "address and port of the server")
 	}
 	if cfg.PollInterval == 0 {
-		logger.Log.Info("Using flag:", cfg.ReportInterval)
+		logger.Log.Debug("Using flag:", cfg.ReportInterval)
 		flag.IntVar(&cfg.ReportInterval, "r", 10, "reporting interval in seconds")
 	}
 	if cfg.PollInterval == 0 {
-		logger.Log.Info("Using flag:", cfg.PollInterval)
+		logger.Log.Debug("Using flag:", cfg.PollInterval)
 		flag.IntVar(&cfg.PollInterval, "p", 2, "polling interval in seconds")
 	}
 	flag.Parse()
