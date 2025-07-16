@@ -83,7 +83,7 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
 
-		// init vats to find and convert the metric value
+		// init vars to find and convert the metric value
 		var (
 			val []byte
 			ok  bool
@@ -151,7 +151,7 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// десериализуем запрос в структуру модели
+		// decode request body into model struct
 		logger.Log.Debug("Decoding request")
 		body := &models.Metrics{}
 		dec := json.NewDecoder(r.Body)
@@ -168,7 +168,13 @@ func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 		// handle different metric types, if unkown -> response as http.StatusBadRequest
 		switch metricType {
 		case models.Counter:
-			metricValue := *body.Delta
+			var metricValue int64
+			if body.Delta != nil {
+				metricValue = *body.Delta
+			} else {
+				http.Error(w, "empty counter value", http.StatusBadRequest)
+				return
+			}
 			logger.Log.Debug("Counter:", metricName, metricValue)
 			h.storage.AddCounter(metricName, metricValue)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
@@ -187,7 +193,65 @@ func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 		}
 
 		// write response
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", "application/json")
 	}
 
+}
+
+// handler for getting the value of the requested metric
+func (h *Handler) GetMetricJsonHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// decode request body into model struct
+		logger.Log.Debug("Decoding request")
+		body := &models.Metrics{}
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(body); err != nil {
+			logger.Log.Debug("Cannot decode request JSON body:", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// get parameters
+		metricName := body.ID
+		metricType := body.MType
+
+		// handle different metric types, if unkown -> response as http.StatusBadRequest
+		switch metricType {
+		case models.Counter:
+			// get the metric value from the storage, if not found -> response as http.StatusNotFound
+			got, ok := h.storage.GetCounter(metricName)
+			if ok {
+				body.Delta = &got
+			} else {
+				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				http.Error(w, "metric not found", http.StatusNotFound)
+				return
+			}
+		case models.Gauge:
+			// get the metric value from the storage, if not found -> response as http.StatusNotFound
+			got, ok := h.storage.GetGauge(metricName)
+			if ok {
+				body.Value = &got
+			} else {
+				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				http.Error(w, "metric not found", http.StatusNotFound)
+				return
+			}
+
+		default:
+			// if metric type is unknown, return http.StatusBadRequest
+			logger.Log.Error("Request invalid metric type: ", metricType)
+			http.Error(w, "Invalid metric type", http.StatusBadRequest)
+			return
+		}
+
+		// write response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			logger.Log.Debug("Cannot encode response JSON:", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
 }

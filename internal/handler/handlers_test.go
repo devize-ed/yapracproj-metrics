@@ -122,3 +122,65 @@ func TestGetMetricHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateJsonHandler(t *testing.T) {
+	endpoint := "/update"
+	ms := storage.NewMemStorage()
+	h := NewHandler(ms)
+
+	r := chi.NewRouter()
+	r.Post(endpoint, h.UpdateMetricJsonHandler())
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	var tests = []struct {
+		name                string
+		expectedContentType string
+		expectedCode        int
+		body                string
+		expectedBody        string
+	}{
+		{
+			name:                "Update Counter",
+			expectedContentType: "application/json",
+			expectedCode:        http.StatusOK,
+			body:                `{"id": "LastGC","type": "counter","value": 5}`,
+			expectedBody:        "",
+		},
+		{
+			name:                "Update Gauge",
+			expectedContentType: "application/json",
+			expectedCode:        http.StatusOK,
+			body:                `{"id": "LastGC","type": "gauge","value": 1744184459}`,
+			expectedBody:        "",
+		},
+		{
+			name:                "empty value",
+			expectedContentType: "application/json",
+			expectedCode:        http.StatusOK,
+			body:                `{"id": "LastGC","type": "gauge","value": 1744184459}`,
+			expectedBody:        "",
+		},
+
+		// {"/update", "application/json", http.StatusOK},
+		// {"/update", "text/plain; charset=utf-8", http.StatusOK},
+		// {"/update/gauge/", "text/plain; charset=utf-8", http.StatusNotFound},
+		// {"/update/incorrectMetricType/testMetric/123", "text/plain; charset=utf-8", http.StatusBadRequest},
+		// {"/update/counter/testCounter/stringValue", "text/plain; charset=utf-8", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(endpoint, func(t *testing.T) {
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL + endpoint
+			fmt.Println("Request URL:", req.URL)
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
+			assert.Equal(t, tt.expectedContentType, resp.Header().Get("Content-Type"), "Response content type didn't match expected")
+		})
+	}
+}
