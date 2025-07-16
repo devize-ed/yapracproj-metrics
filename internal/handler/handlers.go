@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -9,9 +10,9 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
 
-// Repository interface for interacting with the storage.
 type Repository interface {
 	SetGauge(name string, value float64)
 	GetGauge(name string) (float64, bool)
@@ -144,4 +145,49 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 			fmt.Fprintf(w, "%s = %s\n", k, metrics[k])
 		}
 	}
+}
+
+// handler for update the value of the JSON request
+func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// десериализуем запрос в структуру модели
+		logger.Log.Debug("Decoding request")
+		body := &models.Metrics{}
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(body); err != nil {
+			logger.Log.Debug("Cannot decode request JSON body", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// get parameters
+		metricName := body.ID
+		metricType := body.MType
+
+		// handle different metric types, if unkown -> response as http.StatusBadRequest
+		switch metricType {
+		case models.Counter:
+			metricValue := *body.Delta
+			logger.Log.Debug("Counter:", metricName, metricValue)
+			h.storage.AddCounter(metricName, metricValue)
+			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
+
+		case models.Gauge:
+			metricValue := *body.Value
+			logger.Log.Debug("Gauge", metricName, metricValue)
+			h.storage.SetGauge(metricName, metricValue)
+			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
+
+		default:
+			// if metric type is unknown, return http.StatusBadRequest
+			logger.Log.Debug("Request invalid metric type: ", metricType)
+			http.Error(w, "Invalid metric type", http.StatusBadRequest)
+			return
+		}
+
+		// write response
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	}
+
 }
