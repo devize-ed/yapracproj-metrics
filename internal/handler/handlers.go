@@ -150,7 +150,8 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 // handler for update the value of the JSON request
 func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
+		w.Header().Set("Content-Type", "application/json")
+		
 		// decode request body into model struct
 		logger.Log.Debug("Decoding request")
 		body := &models.Metrics{}
@@ -164,7 +165,7 @@ func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 		// get parameters
 		metricName := body.ID
 		metricType := body.MType
-
+		logger.Log.Debugln(body.ID, body.MType)
 		// handle different metric types, if unkown -> response as http.StatusBadRequest
 		switch metricType {
 		case models.Counter:
@@ -172,15 +173,20 @@ func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 			if body.Delta != nil {
 				metricValue = *body.Delta
 			} else {
-				http.Error(w, "empty counter value", http.StatusBadRequest)
+				http.Error(w, "empty counter value", http.StatusNotFound)
 				return
 			}
-			logger.Log.Debug("Counter:", metricName, metricValue)
 			h.storage.AddCounter(metricName, metricValue)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
-			metricValue := *body.Value
+			var metricValue float64
+			if body.Value != nil {
+				metricValue = *body.Value
+			} else {
+				http.Error(w, "empty gauge value", http.StatusNotFound)
+				return
+			}
 			logger.Log.Debug("Gauge", metricName, metricValue)
 			h.storage.SetGauge(metricName, metricValue)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
