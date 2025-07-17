@@ -12,8 +12,8 @@ func (h *Handler) NewRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(MiddlewareLogging, middleware.StripSlashes) //logging middleware
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
-	r.Post("/update", h.UpdateMetricJsonHandler())
-	r.Post("/value", h.GetMetricJsonHandler())
+	r.Post("/update", h.UpdateMetricJSONHandler())
+	r.Post("/value", h.GetMetricJSONHandler())
 	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())
 	r.Get("/", h.ListMetricsHandler())
 

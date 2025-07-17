@@ -135,7 +135,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
-	r.Post(endpoint, h.UpdateMetricJsonHandler())
+	r.Post(endpoint, h.UpdateMetricJSONHandler())
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
@@ -204,7 +204,7 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
-	r.Post(endpoint, h.GetMetricJsonHandler())
+	r.Post(endpoint, h.GetMetricJSONHandler())
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()

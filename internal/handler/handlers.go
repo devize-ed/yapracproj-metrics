@@ -148,10 +148,10 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 }
 
 // handler for update the value of the JSON request
-func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
+func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		// decode request body into model struct
 		logger.Log.Debug("Decoding request")
 		body := &models.Metrics{}
@@ -205,7 +205,7 @@ func (h *Handler) UpdateMetricJsonHandler() http.HandlerFunc {
 }
 
 // handler for getting the value of the requested metric
-func (h *Handler) GetMetricJsonHandler() http.HandlerFunc {
+func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// decode request body into model struct

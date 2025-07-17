@@ -3,6 +3,7 @@ package agent
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 func TestSendMetric(t *testing.T) {
 	type args struct {
 		metric string
-		value  string
+		value  reflect.Value
 	}
 	tests := []struct {
 		name     string
@@ -25,7 +26,7 @@ func TestSendMetric(t *testing.T) {
 			name: "Send metric",
 			args: args{
 				metric: "testMetric",
-				value:  "123",
+				value:  reflect.ValueOf(111.11),
 			},
 			wantErr:  false,
 			wantCode: http.StatusOK,
@@ -40,7 +41,7 @@ func TestSendMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := SendMetric(client, tt.args.metric, tt.args.value, host); (err != nil) != tt.wantErr {
+			if err := SendMetric(client, tt.args.metric, host, tt.args.value); (err != nil) != tt.wantErr {
 				t.Errorf("SendMetric() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

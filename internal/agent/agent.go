@@ -56,36 +56,65 @@ func (a *Agent) Run() error {
 				metric := typ.Field(i).Name
 				value := val.Field(i)
 				// fmt.Printf("%s = %v\n", metric, value)
-				SendMetric(a.client, metric, fmt.Sprint(value), a.config.Host)
+				SendMetric(a.client, metric, a.config.Host, value)
 			}
 		}
 	}
 }
 
 // Sends a metric to the server
-func SendMetric(client *resty.Client, metric, value, host string) error {
-
+func SendMetric(client *resty.Client, metric, host string, value reflect.Value) error {
 	logger.Log.Debug("SendMetric requested for metric: ", metric, " = ", value)
 
-	// set the metric type as gauge by default, change it for counter if metric == "PollCount"
-	var mtype = models.Gauge
-	if metric == "PollCount" {
-		mtype = models.Counter
+	body := models.Metrics{
+		ID: metric,
 	}
 
-	// build the request URL and call the POST method request to the server	//
-	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", host, mtype, metric, value)
+	switch metric {
+	case "PollCount":
+		if !isInteger(value.Kind()) {
+			return fmt.Errorf("PollCount must be integer, got: %s", value.Kind())
+		}
+		body.MType = models.Counter
+		v := value.Int()
+		body.Delta = &v
+
+	default:
+		if !isFloat(value.Kind()) && !isInteger(value.Kind()) {
+			return fmt.Errorf("unsupported kind for gauge: %s", value.Kind())
+		}
+		body.MType = models.Gauge
+
+		var val float64
+		if isInteger(value.Kind()) {
+			val = float64(value.Int())
+		} else {
+			val = value.Float()
+		}
+		body.Value = &val
+	}
+
+	endpoint := fmt.Sprintf("http://%s/update", host)
 	resp, err := client.R().
-		SetHeader("Content-Type", "text/plain; charset=utf-8").
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
 		Post(endpoint)
+
 	if err != nil {
 		logger.Log.Error("Error sending ", metric, ": ", err)
 		return err
 	}
 
-	// logging the response status code
 	logger.Log.Debug("Response status-code: ", resp.StatusCode())
 	return nil
+}
+
+func isInteger(k reflect.Kind) bool {
+	return k >= reflect.Int && k <= reflect.Int64
+}
+
+func isFloat(k reflect.Kind) bool {
+	return k == reflect.Float32 || k == reflect.Float64
 }
 
 // Metrics collector methods
