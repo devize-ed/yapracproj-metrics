@@ -37,10 +37,16 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 // middleware for logging HTTP requests (URI, method, processing time, response status, size)
 func MiddlewareLogging(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		// logger.Log.Info("ReceivedHTTP request:",
-		// 	zap.String("method", r.Method),
-		// 	zap.String("path", r.URL.Path),
-		// )
+		logger.Log.Info("ReceivedHTTP request:",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+		)
+		logger.Log.Infow("ReceivedHTTP request:",
+			"uri", r.URL.Path,
+			"method", r.Method,
+			"body", r.Body,
+		)
+
 		start := time.Now()
 
 		responseData := &responseData{
@@ -56,14 +62,15 @@ func MiddlewareLogging(h http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		logger.Log.Info("Request info:",
-			zap.String("uri", r.RequestURI),
-			zap.String("method", r.Method),
-			zap.Duration("duration", duration),
+		logger.Log.Infow("Request info:",
+			"uri", r.RequestURI,
+			"method", r.Method,
+			"duration", duration,
 		)
-		logger.Log.Info("Response info:",
-			zap.Int("status", responseData.status),
-			zap.Int("size", responseData.size),
+
+		logger.Log.Infow("Response info:",
+			"status", responseData.status,
+			"size", responseData.size,
 		)
 
 	}

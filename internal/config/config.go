@@ -10,7 +10,7 @@ import (
 // holds the configuration for theserver
 type ServerConfig struct {
 	Host     string `env:"ADDRESS"`
-	LogLevel string `env:"LOG_LEVEL" envDefault:"debug"` // log level for the server
+	LogLevel string `env:"LOG_LEVEL" envDefault:"info"` // log level for the server
 }
 
 // holds the configuration for the agent

@@ -56,7 +56,9 @@ func (a *Agent) Run() error {
 				metric := typ.Field(i).Name
 				value := val.Field(i)
 				// fmt.Printf("%s = %v\n", metric, value)
-				SendMetric(a.client, metric, a.config.Host, value)
+				if err := SendMetric(a.client, metric, a.config.Host, value); err != nil {
+					logger.Log.Error("metric ", metric, ": ", err)
+				}
 			}
 		}
 	}
@@ -95,17 +97,18 @@ func SendMetric(client *resty.Client, metric, host string, value reflect.Value) 
 	}
 
 	endpoint := fmt.Sprintf("http://%s/update", host)
-	resp, err := client.R().
+	req := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(endpoint)
+		SetBody(body)
+	logger.Log.Infoln("bosy for req: ", req.Body)
+	resp, err := req.Post(endpoint)
 
 	if err != nil {
 		logger.Log.Error("Error sending ", metric, ": ", err)
 		return err
 	}
 
-	logger.Log.Debug("Response status-code: ", resp.StatusCode())
+	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
 	return nil
 }
 
