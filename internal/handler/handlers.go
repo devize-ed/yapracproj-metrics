@@ -199,6 +199,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 
 		// write response
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	}
 
 }
