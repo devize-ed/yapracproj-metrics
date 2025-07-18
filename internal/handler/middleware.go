@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	"go.uber.org/zap"
 )
 
 type (
@@ -37,16 +36,6 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 // middleware for logging HTTP requests (URI, method, processing time, response status, size)
 func MiddlewareLogging(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		logger.Log.Info("ReceivedHTTP request:",
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
-		)
-		logger.Log.Infow("ReceivedHTTP request:",
-			"uri", r.URL.Path,
-			"method", r.Method,
-			"body", r.Body,
-		)
-
 		start := time.Now()
 
 		responseData := &responseData{

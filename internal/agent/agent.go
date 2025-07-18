@@ -21,7 +21,7 @@ type Agent struct {
 func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 	return &Agent{
 		client:  client,
-		storage: &AgentStorage{},
+		storage: NewAgentStorage(),
 		config:  config,
 	}
 }
@@ -69,7 +69,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 
 	switch v := any(value).(type) {
 	case Gauge:
-		body.MType = models.Counter
+		body.MType = models.Gauge
 		floatValue := float64(v)
 		body.Value = &floatValue
 	case Counter:
@@ -84,7 +84,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 	req := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body)
-	logger.Log.Infoln("bosy for req: ", req.Body)
+	logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 	resp, err := req.Post(endpoint)
 
 	if err != nil {

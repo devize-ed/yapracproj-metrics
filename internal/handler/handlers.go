@@ -161,11 +161,11 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 
 		// get parameters
 		metricName := body.ID
 		metricType := body.MType
-		logger.Log.Debugln(body.ID, body.MType)
 		// handle different metric types, if unkown -> response as http.StatusBadRequest
 		switch metricType {
 		case models.Counter:
@@ -187,7 +187,6 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty gauge value", http.StatusNotFound)
 				return
 			}
-			logger.Log.Debug("Gauge", metricName, metricValue)
 			h.storage.SetGauge(metricName, metricValue)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
@@ -217,6 +216,7 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 
 		// get parameters
 		metricName := body.ID

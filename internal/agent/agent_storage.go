@@ -23,6 +23,13 @@ type AgentStorage struct {
 	Gauges   map[string]Gauge
 }
 
+func NewAgentStorage() *AgentStorage {
+	return &AgentStorage{
+		Counters: make(map[string]Counter),
+		Gauges:   make(map[string]Gauge),
+	}
+}
+
 // Metrics collector methods
 func (s *AgentStorage) CollectMetrics() {
 	logger.Log.Debug("Collecting metrics")
