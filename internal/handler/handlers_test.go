@@ -149,13 +149,13 @@ func TestUpdateJsonHandler(t *testing.T) {
 		{
 			name:                "update_counter",
 			expectedContentType: "application/json",
-			expectedCode:        http.StatusNoContent,
+			expectedCode:        http.StatusOK,
 			body:                `{"id": "testCounter","type": "counter","delta": 5}`,
 		},
 		{
 			name:                "update_gauge",
 			expectedContentType: "application/json",
-			expectedCode:        http.StatusNoContent,
+			expectedCode:        http.StatusOK,
 			body:                `{"id": "testGauge1","type": "gauge","value": 123123}`,
 		},
 		{
