@@ -80,7 +80,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 		return fmt.Errorf("unsupported metric type %T", v)
 	}
 
-	endpoint := fmt.Sprintf("http://%s/update", host)
+	endpoint := fmt.Sprintf("http://%s/update/", host)
 	req := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body)
