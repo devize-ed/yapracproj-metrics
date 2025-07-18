@@ -153,7 +153,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		// decode request body into model struct
-		logger.Log.Debug("Decoding request")
+		logger.Log.Debug("Decoding request JSON body")
 		body := &models.Metrics{}
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(body); err != nil {
@@ -210,7 +210,7 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// decode request body into model struct
-		logger.Log.Debug("Decoding request")
+		logger.Log.Debug("Decoding request JSON body")
 		body := &models.Metrics{}
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(body); err != nil {

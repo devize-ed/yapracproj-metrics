@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -48,12 +51,12 @@ func (a *Agent) Run() error {
 			// iterate over the agent storage and send metrics to the server
 			for name, val := range a.storage.Counters {
 				if err := SendMetric(a.client, name, a.config.Host, val); err != nil {
-					logger.Log.Error("metric ", name, ": ", err)
+					logger.Log.Error("error sending ", name, ": ", err)
 				}
 			}
 			for name, val := range a.storage.Gauges {
 				if err := SendMetric(a.client, name, a.config.Host, val); err != nil {
-					logger.Log.Error("metric ", name, ": ", err)
+					logger.Log.Error("error sending ", name, ": ", err)
 				}
 			}
 		}
@@ -67,6 +70,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 		ID: metric,
 	}
 
+	// set value and metric type
 	switch v := any(value).(type) {
 	case Gauge:
 		body.MType = models.Gauge
@@ -80,16 +84,30 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 		return fmt.Errorf("unsupported metric type %T", v)
 	}
 
+	// marshl bosy to bytes
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("error marshling request body: %v", err)
+	}
+
+	// compress the body
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, _ = zw.Write(jsonBody)
+	_ = zw.Close()
+
+	// make and send request
 	endpoint := fmt.Sprintf("http://%s/update/", host)
 	req := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(body)
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(buf.Bytes()) // set compressed body for the request
+
 	logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 	resp, err := req.Post(endpoint)
-
 	if err != nil {
-		logger.Log.Error("Error sending ", metric, ": ", err)
-		return err
+		return fmt.Errorf("failed to send request: %v", err)
 	}
 
 	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)

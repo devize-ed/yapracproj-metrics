@@ -10,7 +10,7 @@ import (
 func (h *Handler) NewRouter() http.Handler {
 	// init and configure the router, adding the route paths
 	r := chi.NewRouter()
-	r.Use(MiddlewareLogging, middleware.StripSlashes) //logging middleware
+	r.Use(MiddlewareLogging, MiddlewareGzip, middleware.StripSlashes) //logging middleware
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
 	r.Post("/update", h.UpdateMetricJSONHandler())
 	r.Post("/value", h.GetMetricJSONHandler())

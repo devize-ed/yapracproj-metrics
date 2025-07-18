@@ -30,6 +30,9 @@ func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp 
 }
 
 func TestUpdateHandler(t *testing.T) {
+	_ = logger.Initialize("debug")
+	defer logger.Log.Sync()
+
 	ms := storage.NewMemStorage()
 	h := NewHandler(ms)
 
@@ -67,6 +70,9 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestListAllHandler(t *testing.T) {
+	_ = logger.Initialize("debug")
+	defer logger.Log.Sync()
+
 	ms := storage.NewMemStorage()
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
@@ -94,6 +100,9 @@ func TestListAllHandler(t *testing.T) {
 }
 
 func TestGetMetricHandler(t *testing.T) {
+	_ = logger.Initialize("debug")
+	defer logger.Log.Sync()
+
 	ms := storage.NewMemStorage()
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
@@ -125,9 +134,7 @@ func TestGetMetricHandler(t *testing.T) {
 }
 
 func TestUpdateJsonHandler(t *testing.T) {
-	if err := logger.Initialize("debug"); err != nil {
-		assert.NoError(t, err, "failed to initialize logger")
-	}
+	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
 	endpoint := "/update"
@@ -192,10 +199,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 }
 
 func TestHandler_GetMetricJsonHandler(t *testing.T) {
-
-	if err := logger.Initialize("debug"); err != nil {
-		assert.NoError(t, err, "failed to initialize logger")
-	}
+	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
 	endpoint := "/value"
