@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
@@ -18,6 +19,7 @@ func main() {
 }
 
 func run() error {
+	time.Sleep(time.Second)
 	ms := st.NewMemStorage() // init the memory storage for metrics
 	h := handler.NewHandler(ms)
 	cfg, err := config.GetServerConfig() // call the function to get server configuration
