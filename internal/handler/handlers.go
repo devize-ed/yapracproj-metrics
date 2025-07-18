@@ -230,7 +230,8 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 			if ok {
 				body.Delta = &got
 			} else {
-				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				logger.Log.Error("Requested metric not found: ", metricName)
+				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
@@ -240,7 +241,8 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 			if ok {
 				body.Value = &got
 			} else {
-				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				logger.Log.Error("Requested metric not found: ", metricName)
+				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
