@@ -111,5 +111,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 	}
 
 	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
+	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
+	logger.Log.Debug(resp.Body())
 	return nil
 }
