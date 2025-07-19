@@ -47,8 +47,8 @@ func TestUpdateHandler(t *testing.T) {
 		expectedContentType string
 		expectedCode        int
 	}{
-		{"/update/counter/testCounter/123", "text/plain; charset=utf-8", http.StatusOK},
-		{"/update/gauge/testGauge/123", "text/plain; charset=utf-8", http.StatusOK},
+		{"/update/counter/testCounter/123", "text/html; charset=utf-8", http.StatusOK},
+		{"/update/gauge/testGauge/123", "text/html; charset=utf-8", http.StatusOK},
 		{"/update/gauge/", "text/plain; charset=utf-8", http.StatusNotFound},
 		{"/update/incorrectMetricType/testMetric/123", "text/plain; charset=utf-8", http.StatusBadRequest},
 		{"/update/counter/testCounter/stringValue", "text/plain; charset=utf-8", http.StatusBadRequest},
