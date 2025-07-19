@@ -59,11 +59,22 @@ func (a *Agent) Run() error {
 					logger.Log.Error("error sending ", name, ": ", err)
 				}
 			}
+
+			// for name, val := range a.storage.Counters {
+			// 	if err := GetMetric(a.client, name, a.config.Host, val); err != nil {
+			// 		logger.Log.Error("error getting ", name, ": ", err)
+			// 	}
+			// }
+			// for name, val := range a.storage.Gauges {
+			// 	if err := GetMetric(a.client, name, a.config.Host, val); err != nil {
+			// 		logger.Log.Error("error getting ", name, ": ", err)
+			// 	}
+			// }
 		}
 	}
 }
 
-// Sends a metric to the server
+// sends a metric to the server
 func SendMetric[T MetricValue](client *resty.Client, metric, host string, value T) error {
 
 	body := models.Metrics{
@@ -101,7 +112,7 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 	req := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
 		SetBody(buf.Bytes()) // set compressed body for the request
 
 	logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
@@ -112,6 +123,63 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 
 	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
 	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
-	logger.Log.Debug(resp.Body())
+	if err := json.Unmarshal(resp.Body(), &body); err != nil {
+		logger.Log.Fatal(err)
+	}
+	fmt.Printf("%+v\n", body)
+
 	return nil
+}
+
+// test function for testing server
+func GetMetric[T MetricValue](client *resty.Client, metric, host string, value T) error {
+	body := models.Metrics{
+		ID: metric,
+	}
+	switch v := any(value).(type) {
+	case Gauge:
+		body.MType = models.Gauge
+	case Counter:
+		body.MType = models.Counter
+	default:
+		return fmt.Errorf("unsupported metric type %T", v)
+	}
+
+	// marshl body to bytes
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("error marshling request body: %v", err)
+	}
+
+	// compress the body
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, _ = zw.Write(jsonBody)
+	_ = zw.Close()
+
+	// make and send request
+	endpoint := fmt.Sprintf("http://%s/value/", host)
+	req := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
+		SetBody(buf.Bytes()) // set compressed body for the request
+		// SetBody(body)
+
+	logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
+	logger.Log.Debug("req header", req.Header)
+	resp, err := req.Post(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+
+	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
+	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
+
+	if err := json.Unmarshal(resp.Body(), &body); err != nil {
+		logger.Log.Fatal(err)
+	}
+	fmt.Printf("%+v\n", body)
+	return nil
+
 }
