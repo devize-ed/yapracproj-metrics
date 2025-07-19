@@ -122,7 +122,7 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 		}
 
 		// write response
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write(val)
 	}
 }
@@ -133,7 +133,7 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 		// get the map with all the metrics from the storage
 		metrics := h.storage.ListAll()
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		// sort the keys
 		keys := make([]string, 0, len(metrics))
 		for k := range metrics {

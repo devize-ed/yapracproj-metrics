@@ -39,8 +39,8 @@ func (c *compressWriter) WriteHeader(code int) {
 	header := c.Header()
 	if code < 300 && !c.compress {
 		contentType := header.Get("Content-Type")
-		if strings.HasPrefix(contentType, "application/json") ||
-			strings.HasPrefix(contentType, "text/html") {
+		if strings.Contains(contentType, "application/json") ||
+			strings.Contains(contentType, "text/html") {
 			c.compress = true
 		}
 	}
