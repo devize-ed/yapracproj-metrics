@@ -2,10 +2,8 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/compress"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
@@ -64,47 +62,6 @@ func MiddlewareLogging(h http.Handler) http.Handler {
 			"size", responseData.size,
 		)
 
-	}
-	return http.HandlerFunc(logFn)
-}
-
-// middleware for compression coding
-func MiddlewareGzip(h http.Handler) http.Handler {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
-		ow := w // set original http.ResponseWriter
-
-		// check if content type application/json or text/html
-		contentType := r.Header.Get("Content-Type")
-		isAccepted := strings.Contains(contentType, "application/json") ||
-			strings.Contains(contentType, "text/html")
-		if isAccepted {
-			logger.Log.Debugf("Accepted Content Type for compression")
-			// check if agent is assepting gzip and compress it
-			acceptEncoding := r.Header.Get("Accept-Encoding")
-			supportsGzip := strings.Contains(acceptEncoding, "gzip")
-			if supportsGzip {
-				logger.Log.Debugf("Agent support gzip encoding, compressing response...")
-				cw := compress.NewCompressWriter(w)
-				ow = cw
-				defer cw.Close()
-			}
-
-			// check if received data compressed and decompress it
-			contentEncoding := r.Header.Get("Content-Encoding")
-			sendsGzip := strings.Contains(contentEncoding, "gzip")
-			if sendsGzip {
-				logger.Log.Debugf("Received data is compressed, decompressing...")
-				cr, err := compress.NewCompressReader(r.Body)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				r.Body = cr
-				defer cr.Close()
-			}
-		}
-
-		h.ServeHTTP(ow, r)
 	}
 	return http.HandlerFunc(logFn)
 }
