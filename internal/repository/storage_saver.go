@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -60,7 +59,7 @@ func (ms *MemStorage) Load(fname string) error {
 	// check if the file exists
 	data, err := os.ReadFile(fname)
 	if err != nil {
-		return fmt.Errorf("file not found: %w", err)
+		return os.ErrNotExist
 	}
 
 	// check if the data is empty

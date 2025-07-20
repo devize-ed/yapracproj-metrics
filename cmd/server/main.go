@@ -41,8 +41,8 @@ func run() error {
 	// create a new in-memory storage
 	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)
 	if cfg.Restore {
-		if err := ms.Load(cfg.FPath); err != nil {
-			return fmt.Errorf("failed to load metrics: %w", err)
+		if err := ms.Load(cfg.FPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("load metrics: %w", err)
 		}
 	}
 
