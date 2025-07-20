@@ -11,35 +11,50 @@ import (
 func TestGetServerConfig(t *testing.T) {
 	tests := []struct {
 		name           string
-		envVars        []string
+		envVars        map[string]string
 		args           []string
 		expectedConfig ServerConfig
 	}{
 		{
-			name:    "Environment variables",
-			envVars: []string{"ADDRESS", ":8081"},
-			args:    []string{"-a=:7070"},
+			name: "Environment variables",
+			envVars: map[string]string{
+				"ADDRESS":           ":8081",
+				"STORE_INTERVAL":    "500",
+				"FILE_STORAGE_PATH": "./test.json",
+				"RESTORE":           "false",
+				"LOG_LEVEL":         "error",
+			},
+			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-r=false"},
 			expectedConfig: ServerConfig{
-				Host:     ":8081",
-				LogLevel: "debug",
+				Host:          ":8081",
+				StoreInterval: 500,
+				FPath:         "./test.json",
+				Restore:       false,
+				LogLevel:      "error",
 			},
 		},
 		{
 			name:    "CLI flags",
-			envVars: []string{},
-			args:    []string{"-a=:7070"},
+			envVars: map[string]string{},
+			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-r=false"},
 			expectedConfig: ServerConfig{
-				Host:     ":7070",
-				LogLevel: "debug",
+				Host:          ":7070",
+				StoreInterval: 400,
+				FPath:         "./test1.json",
+				Restore:       false,
+				LogLevel:      "debug",
 			},
 		},
 		{
 			name:    "Defaults",
-			envVars: []string{},
+			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: ServerConfig{
-				Host:     "localhost:8080",
-				LogLevel: "debug",
+				Host:          "localhost:8080",
+				StoreInterval: 300,
+				FPath:         "./metrics_storage.json",
+				Restore:       false,
+				LogLevel:      "debug",
 			},
 		},
 	}
@@ -47,10 +62,11 @@ func TestGetServerConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
 
-			if len(tc.envVars) != 0 {
-				os.Setenv(tc.envVars[0], tc.envVars[1])
-				defer os.Unsetenv(tc.envVars[0])
+			for key, val := range tc.envVars {
+				os.Setenv(key, val)
+				defer os.Unsetenv(key)
 			}
+
 			os.Args = append([]string{"cmd"}, tc.args...)
 
 			cfg, err := GetServerConfig()

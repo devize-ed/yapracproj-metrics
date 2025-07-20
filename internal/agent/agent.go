@@ -126,7 +126,6 @@ func SendMetric[T MetricValue](client *resty.Client, metric, host string, value 
 	if err := json.Unmarshal(resp.Body(), &body); err != nil {
 		logger.Log.Fatal(err)
 	}
-	fmt.Printf("%+v\n", body)
 
 	return nil
 }
@@ -179,7 +178,6 @@ func GetMetric[T MetricValue](client *resty.Client, metric, host string, value T
 	if err := json.Unmarshal(resp.Body(), &body); err != nil {
 		logger.Log.Fatal(err)
 	}
-	fmt.Printf("%+v\n", body)
 	return nil
 
 }

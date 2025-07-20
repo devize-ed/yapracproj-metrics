@@ -1,3 +1,4 @@
+// repository/storage_test.go
 package repository
 
 import (
@@ -5,6 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+func newTestStorage() *MemStorage {
+	return NewMemStorage(0, "")
+}
 
 func TestMemStorage_SetGauge(t *testing.T) {
 	tests := []struct {
@@ -16,10 +21,10 @@ func TestMemStorage_SetGauge(t *testing.T) {
 	}{
 		{
 			name:       "successful set gauge",
+			ms:         newTestStorage(),
 			metricName: "testMetric",
 			value:      123.456,
 			want:       123.456,
-			ms:         NewMemStorage(),
 		},
 		{
 			name:       "override existing gauge",
@@ -27,7 +32,7 @@ func TestMemStorage_SetGauge(t *testing.T) {
 			value:      123,
 			want:       123,
 			ms: func() *MemStorage {
-				ms := NewMemStorage()
+				ms := newTestStorage()
 				ms.SetGauge("testMetric", 123.456)
 				return ms
 			}(),
@@ -39,7 +44,7 @@ func TestMemStorage_SetGauge(t *testing.T) {
 			tt.ms.SetGauge(tt.metricName, tt.value)
 
 			got, ok := tt.ms.GetGauge(tt.metricName)
-			assert.True(t, ok, "error setting gauge metric")
+			assert.True(t, ok, "metric should exist")
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -66,18 +71,17 @@ func TestMemStorage_GetGauge(t *testing.T) {
 		},
 	}
 
-	ms := NewMemStorage()
+	ms := newTestStorage()
 	ms.SetGauge("testMetric", 123.456)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got, ok := ms.GetGauge(tt.metricName)
+
+			assert.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
 				assert.Equal(t, tt.wantValue, got)
-				return
 			}
-			assert.Equal(t, tt.wantOK, ok)
 		})
 	}
 }
@@ -88,15 +92,14 @@ func TestMemStorage_AddCounter(t *testing.T) {
 		ms         *MemStorage
 		metricName string
 		delta      int64
-		init       int64
 		want       int64
 	}{
 		{
 			name:       "new counter metric",
+			ms:         newTestStorage(),
 			metricName: "testMetric",
 			delta:      5,
 			want:       5,
-			ms:         NewMemStorage(),
 		},
 		{
 			name:       "increment existing counter",
@@ -104,8 +107,8 @@ func TestMemStorage_AddCounter(t *testing.T) {
 			delta:      5,
 			want:       15,
 			ms: func() *MemStorage {
-				ms := NewMemStorage()
-				ms.counter["testMetric"] = 10
+				ms := newTestStorage()
+				ms.Counter["testMetric"] = 10
 				return ms
 			}(),
 		},
@@ -116,7 +119,7 @@ func TestMemStorage_AddCounter(t *testing.T) {
 			tt.ms.AddCounter(tt.metricName, tt.delta)
 
 			got, ok := tt.ms.GetCounter(tt.metricName)
-			assert.True(t, ok, "error setting counter metric")
+			assert.True(t, ok, "metric should exist")
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -143,17 +146,17 @@ func TestMemStorage_GetCounter(t *testing.T) {
 		},
 	}
 
-	ms := NewMemStorage()
-	ms.counter["testMetric"] = 5
+	ms := newTestStorage()
+	ms.Counter["testMetric"] = 5
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := ms.GetCounter(tt.metricName)
 
+			assert.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
 				assert.Equal(t, tt.wantValue, got)
 			}
-			assert.Equal(t, tt.wantOK, ok)
 		})
 	}
 }

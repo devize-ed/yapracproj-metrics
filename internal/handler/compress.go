@@ -2,7 +2,6 @@ package handler
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -138,7 +137,6 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 			ow = cw
 		}
 		h.ServeHTTP(ow, r)
-		fmt.Println(ow.Header())
 	}
 
 	return http.HandlerFunc(logFn)

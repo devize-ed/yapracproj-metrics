@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,7 +32,7 @@ func TestUpdateHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage()
+	ms := storage.NewMemStorage(0, "")
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
@@ -59,7 +58,6 @@ func TestUpdateHandler(t *testing.T) {
 			req := resty.New().R()
 			req.Method = http.MethodPost
 			req.URL = srv.URL + tt.url
-			fmt.Println("Request URL:", req.URL)
 			resp, err := req.Send()
 			assert.NoError(t, err, "error making HTTP request")
 
@@ -73,7 +71,7 @@ func TestListAllHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage()
+	ms := storage.NewMemStorage(0, "")
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
@@ -103,7 +101,7 @@ func TestGetMetricHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage()
+	ms := storage.NewMemStorage(0, "")
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
@@ -138,7 +136,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/update"
-	ms := storage.NewMemStorage()
+	ms := storage.NewMemStorage(0, "")
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
@@ -188,7 +186,6 @@ func TestUpdateJsonHandler(t *testing.T) {
 			req.SetHeader("Content-Type", "application/json")
 			req.SetBody(tt.body)
 
-			fmt.Println("Request URL:", req.URL)
 			resp, err := req.Send()
 			assert.NoError(t, err, "error making HTTP request")
 
@@ -203,7 +200,7 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/value"
-	ms := storage.NewMemStorage()
+	ms := storage.NewMemStorage(0, "")
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
@@ -245,7 +242,6 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 			req.SetHeader("Content-Type", "application/json")
 			req.SetBody(tt.body)
 
-			fmt.Println("Request URL:", req.URL)
 			resp, err := req.Send()
 			assert.NoError(t, err, "error making HTTP request")
 
