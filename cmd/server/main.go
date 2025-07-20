@@ -29,14 +29,14 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to get server config: %w", err)
 	}
-	logger.Log.Infof("Server config: interval=%d fpath=%s restore=%v host=%s",
-		cfg.StoreInterval, cfg.FPath, cfg.Restore, cfg.Host)
-
 	// initialize the logger with the specified log level
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Log.Sync()
+
+	logger.Log.Infof("Server config: interval=%d fpath=%s restore=%v host=%s",
+		cfg.StoreInterval, cfg.FPath, cfg.Restore, cfg.Host)
 
 	// create a new in-memory storage
 	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)

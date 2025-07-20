@@ -103,7 +103,6 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int, fpath str
 		}()
 		return
 	}
-	logger.Log.Infof("interval saver started: interval=%ds path=%s", interval, fpath)
 
 	// create a ticker to save the metrics on interval
 	go func() {

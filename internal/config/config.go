@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"strings"
 
 	"github.com/caarlos0/env"
 )
@@ -40,6 +41,8 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return cfg, err
 	}
+
+	cfg.Host = strings.TrimPrefix(cfg.Host, "http://")
 
 	return cfg, nil
 }
