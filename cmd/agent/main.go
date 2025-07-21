@@ -8,12 +8,11 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/go-resty/resty/v2"
-	"go.uber.org/zap"
 )
 
 func main() {
 	if err := run(); err != nil {
-		logger.Log.Fatal(err)
+		log.Fatal(err)
 	}
 
 }
@@ -21,23 +20,22 @@ func main() {
 func run() error {
 	cfg, err := config.GetAgentConfig() // Get agent configuration.
 	if err != nil {
-		log.Fatal("Failed to get agent config:", err)
+		return fmt.Errorf("failed to get agent config: %w", err)
 	}
 	// Initialize the logger with the configuration.
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Log.Sync()
+
+	// Log the agent start information.
+	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",
+		cfg.PollInterval, cfg.ReportInterval, cfg.Host, cfg.EnableGzip)
+
 	client := resty.New() // Initialize HTTP client.
 
 	a := agent.NewAgent(client, cfg) // Create a new agent instance.
 	a.Run()                          // Start the agent to collect and report metrics.
 
-	// Log the agent start information.
-	logger.Log.Info("Agent started with config:",
-		zap.String("address", cfg.Host),
-		zap.Int("poll_interval", cfg.PollInterval),
-		zap.Int("report_interval", cfg.ReportInterval),
-	)
 	return nil
 }

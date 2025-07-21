@@ -132,9 +132,7 @@ func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
 
 func (a Agent) Request(metric string, endpoint string, body models.Metrics) error {
 	req := a.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetHeader("Accept-Encoding", "gzip")
+		SetHeader("Content-Type", "application/json")
 
 	switch a.config.EnableGzip {
 	case true:
@@ -142,7 +140,9 @@ func (a Agent) Request(metric string, endpoint string, body models.Metrics) erro
 		if err != nil {
 			return fmt.Errorf("failed to compress request body: %v", err)
 		}
-		req.SetBody(buf) // Use the compressed request body.
+		req.SetHeader("Content-Encoding", "gzip").
+			SetHeader("Accept-Encoding", "gzip").
+			SetBody(buf) // Use the compressed request body.
 	case false:
 		req.SetBody(body) // Use the uncompressed request body.
 	}

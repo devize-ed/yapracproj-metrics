@@ -62,7 +62,7 @@ func GetAgentConfig() (AgentConfig, error) {
 	flag.StringVar(&cfg.Host, "a", ":8080", "address and port of the server")
 	flag.IntVar(&cfg.ReportInterval, "r", 10, "reporting interval in seconds")
 	flag.IntVar(&cfg.PollInterval, "p", 2, "polling interval in seconds")
-	flag.BoolVar(&cfg.EnableGzip, "c", false, "enable gzip compression for requests")
+	flag.BoolVar(&cfg.EnableGzip, "c", true, "enable gzip compression for requests")
 	flag.BoolVar(&cfg.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
 
 	// Parse flags.
