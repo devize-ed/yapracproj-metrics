@@ -22,9 +22,9 @@ type AgentConfig struct {
 	Host           string `env:"ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
-	LogLevel       string `env:"LOG_LEVEL" envDefault:"debug"`          // Log level for the agent.
-	EnableGzip     bool   `env:"ENABLE_GZIP" envDefault:"false"`        // Enable gzip compression for requests.
-	EnableTestGet  bool   `env:"ENABLE_GET_METRICS" envDefault:"false"` // Enable test retrieval of metrics from the server.
+	LogLevel       string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
+	EnableGzip     bool   `env:"ENABLE_GZIP"`                  // Enable gzip compression for requests.
+	EnableTestGet  bool   `env:"ENABLE_GET_METRICS"`           // Enable test retrieval of metrics from the server.
 }
 
 // GetServerConfig parses environment variables and command-line flags, then returns the server configuration.
@@ -47,7 +47,7 @@ func GetServerConfig() (ServerConfig, error) {
 
 	// Validate the configuration.
 	if cfg.StoreInterval < 0 {
-		return cfg, fmt.Errorf("STORE_INTERVAL must be non‑negative (got %d)", cfg.StoreInterval)
+		return cfg, fmt.Errorf("STORE_INTERVAL must be non-negative (got %d)", cfg.StoreInterval)
 	}
 
 	cfg.Host = strings.TrimPrefix(cfg.Host, "http://")
@@ -75,10 +75,10 @@ func GetAgentConfig() (AgentConfig, error) {
 
 	// Validate the configuration.
 	if cfg.PollInterval < 0 {
-		return cfg, fmt.Errorf("POLL_INTERVAL must be non‑negative (got %d)", cfg.PollInterval)
+		return cfg, fmt.Errorf("POLL_INTERVAL must be non-negative (got %d)", cfg.PollInterval)
 	}
 	if cfg.ReportInterval < 0 {
-		return cfg, fmt.Errorf("REPORT_INTERVAL must be non‑negative (got %d)", cfg.ReportInterval)
+		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.ReportInterval)
 	}
 
 	return cfg, nil

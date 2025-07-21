@@ -155,7 +155,7 @@ func (a Agent) Request(metric string, endpoint string, body models.Metrics) erro
 		return fmt.Errorf("failed to POST request: %v", err)
 	}
 
-	logger.Log.Debug("Response status‑code: ", resp.StatusCode(), " Metric: ", metric)
+	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
 	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
 	return nil
 }
