@@ -80,7 +80,7 @@ func (a *Agent) Run() error {
 
 // SendMetric sends a single metric to the server.
 func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
-	endpoint := fmt.Sprintf("http://%s/value/", a.config.Host)
+	endpoint := fmt.Sprintf("http://%s/update/", a.config.Host)
 	body := models.Metrics{
 		ID: metric,
 	}
