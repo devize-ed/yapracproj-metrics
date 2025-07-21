@@ -14,6 +14,7 @@ func TestGetServerConfig(t *testing.T) {
 		envVars        map[string]string
 		args           []string
 		expectedConfig ServerConfig
+		wantErr        bool
 	}{
 		{
 			name: "Environment variables",
@@ -32,6 +33,7 @@ func TestGetServerConfig(t *testing.T) {
 				Restore:       false,
 				LogLevel:      "error",
 			},
+			wantErr: false,
 		},
 		{
 			name:    "CLI flags",
@@ -44,6 +46,7 @@ func TestGetServerConfig(t *testing.T) {
 				Restore:       false,
 				LogLevel:      "debug",
 			},
+			wantErr: false,
 		},
 		{
 			name:    "Defaults",
@@ -56,6 +59,26 @@ func TestGetServerConfig(t *testing.T) {
 				Restore:       false,
 				LogLevel:      "debug",
 			},
+			wantErr: false,
+		},
+		{
+			name: "negative StoreInterval",
+			envVars: map[string]string{
+				"ADDRESS":           ":8081",
+				"STORE_INTERVAL":    "-1",
+				"FILE_STORAGE_PATH": "./test.json",
+				"RESTORE":           "false",
+				"LOG_LEVEL":         "error",
+			},
+			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-r=false"},
+			expectedConfig: ServerConfig{
+				Host:          ":8081",
+				StoreInterval: 500,
+				FPath:         "./test.json",
+				Restore:       false,
+				LogLevel:      "error",
+			},
+			wantErr: true,
 		},
 	}
 	for _, tc := range tests {
@@ -70,6 +93,10 @@ func TestGetServerConfig(t *testing.T) {
 			os.Args = append([]string{"cmd"}, tc.args...)
 
 			cfg, err := GetServerConfig()
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedConfig, cfg)
 		})
@@ -82,6 +109,7 @@ func TestGetAgentConfig(t *testing.T) {
 		envVars        map[string]string
 		args           []string
 		expectedConfig AgentConfig
+		wantErr        bool
 	}{
 		{
 			name: "Environment variables",
@@ -102,6 +130,7 @@ func TestGetAgentConfig(t *testing.T) {
 				EnableGzip:     true,
 				EnableTestGet:  true,
 			},
+			wantErr: false,
 		},
 		{
 			name:    "CLI flags",
@@ -115,6 +144,7 @@ func TestGetAgentConfig(t *testing.T) {
 				EnableGzip:     false,
 				EnableTestGet:  false,
 			},
+			wantErr: false,
 		},
 		{
 			name:    "Defaults",
@@ -125,9 +155,31 @@ func TestGetAgentConfig(t *testing.T) {
 				ReportInterval: 10,
 				PollInterval:   2,
 				LogLevel:       "debug",
-				EnableGzip:     false,
+				EnableGzip:     true,
 				EnableTestGet:  false,
 			},
+			wantErr: false,
+		},
+		{
+			name: "negative PollInterval",
+			envVars: map[string]string{
+				"ADDRESS":            ":8081",
+				"REPORT_INTERVAL":    "5",
+				"POLL_INTERVAL":      "-1",
+				"LOG_LEVEL":          "error",
+				"ENABLE_GZIP":        "true",
+				"ENABLE_GET_METRICS": "true",
+			},
+			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
+			expectedConfig: AgentConfig{
+				Host:           ":8081",
+				ReportInterval: 5,
+				PollInterval:   1,
+				LogLevel:       "debug",
+				EnableGzip:     true,
+				EnableTestGet:  true,
+			},
+			wantErr: true,
 		},
 	}
 
@@ -143,6 +195,10 @@ func TestGetAgentConfig(t *testing.T) {
 			os.Args = append([]string{"cmd"}, tc.args...)
 
 			cfg, err := GetAgentConfig()
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedConfig, cfg)
 		})

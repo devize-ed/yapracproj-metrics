@@ -5,10 +5,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// singleton logger instance
+// Singleton logger instance.
 var Log *zap.SugaredLogger = zap.NewNop().Sugar()
 
-// Initialize singleton logger
+// Initialize singleton logger.
 func Initialize(level string) error {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
