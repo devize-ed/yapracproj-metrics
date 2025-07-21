@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,7 +19,6 @@ func main() {
 	if err := run(); err != nil {
 		logger.Log.Fatal(err)
 	}
-
 }
 
 func run() error {
@@ -39,11 +37,9 @@ func run() error {
 		cfg.StoreInterval, cfg.FPath, cfg.Restore, cfg.Host)
 
 	// create a new in-memory storage
-	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)
-	if cfg.Restore {
-		if err := ms.Load(cfg.FPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("load metrics: %w", err)
-		}
+	ms, err := initStorage(cfg)
+	if err != nil {
+		return err
 	}
 
 	// create a context that listens for OS signals to shut down the server
@@ -56,32 +52,22 @@ func run() error {
 
 	// create a new HTTP server with the configuration and handler
 	h := handler.NewHandler(ms)
-	srv := server.NewServer(cfg, h)
+	srv := server.NewServer(cfg, ms, h)
 
-	// loging the address and starting the server
-	go func() {
-		logger.Log.Infof("HTTP server listening on %s", cfg.Host)
-		if err := srv.ListenAndServe(); err != nil &&
-			!errors.Is(err, http.ErrServerClosed) {
-			logger.Log.Errorf("listen error: %v", err)
-		} else {
-			logger.Log.Debug("HTTP server closed")
-		}
-	}()
-
-	// wait for the signal to stop the server
-	<-ctx.Done()
-	logger.Log.Info("Stop signal received, shutting down the server...")
-	if err := srv.Shutdown(ctx); err != nil {
-		logger.Log.Errorf("error shutting down the server: %v", err)
-	}
-
-	// save the metrics before exiting
-	logger.Log.Debugf("Saving before exit ...")
-	err = ms.Save(cfg.FPath)
-	if err != nil {
-		logger.Log.Errorf("failed to save on exit: %v", err)
+	if err = srv.Serve(ctx); err != nil {
+		return fmt.Errorf("server error: %w", err)
 	}
 
 	return nil
+}
+
+func initStorage(cfg config.ServerConfig) (*st.MemStorage, error) {
+	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)
+
+	if cfg.Restore {
+		if err := ms.Load(cfg.FPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("load metrics: %w", err)
+		}
+	}
+	return ms, nil
 }

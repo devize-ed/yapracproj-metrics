@@ -9,13 +9,14 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
-// compression f or the response
+// compressWriter wraps http.ResponseWriter to handle gzip compression.
 type compressWriter struct {
 	http.ResponseWriter
 	zw       *gzip.Writer
 	compress bool // flag if compression is needed
 }
 
+// newCompressWriter creates a new compressWriter that wraps the original http.ResponseWriter.
 func newCompressWriter(w http.ResponseWriter, compress bool) *compressWriter {
 	if !compress {
 		return &compressWriter{ResponseWriter: w}
@@ -33,10 +34,11 @@ func (c *compressWriter) Header() http.Header {
 	return c.ResponseWriter.Header()
 }
 
+// WriteHeader writes the HTTP status code and sets the Content-Encoding header if compression is enabled.
 func (c *compressWriter) WriteHeader(code int) {
 	// check Content‑Type and status code
 	header := c.Header()
-	if code < 300 && !c.compress {
+	if code < http.StatusMultipleChoices && !c.compress {
 		contentType := header.Get("Content-Type")
 		if strings.Contains(contentType, "application/json") ||
 			strings.Contains(contentType, "text/html") {
@@ -72,12 +74,13 @@ func (c *compressWriter) Close() error {
 	return nil
 }
 
-// decompression, read compressed data
+// compressReader wraps io.ReadCloser to handle gzip decompression.
 type compressReader struct {
 	r  io.ReadCloser
 	zr *gzip.Reader
 }
 
+// NewCompressReader creates a new compressReader that decompresses gzip-encoded data.
 func NewCompressReader(r io.ReadCloser) (*compressReader, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -101,12 +104,12 @@ func (c *compressReader) Close() error {
 	return c.zr.Close()
 }
 
-// middleware for compression coding
+// MiddlewareGzip is a middleware that handles gzip compression and decompression.
 func MiddlewareGzip(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		ow := w // set original http.ResponseWriter
+		ow := w // Set original http.ResponseWriter.
 		logger.Log.Debug("req header", r.Header)
-		// check if received data compressed and decompress it
+		// check if request is compressed, decompress it and remove Content-Encoding header.
 		contentEncoding := r.Header.Get("Content-Encoding")
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		logger.Log.Debugf("Content-Encoding: %s, sendsGzip: %t", contentEncoding, sendsGzip)
@@ -125,8 +128,7 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 			r.Header.Del("Content-Length")
 		}
 
-		// check if agent is assepting gzip and compress it
-
+		// Check if agent is accepting gzip and compress it.
 		acceptEncoding := r.Header.Get("Accept-Encoding")
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
 		logger.Log.Debugf("Accept-Encoding: %s, gzip: %t", acceptEncoding, supportsGzip)

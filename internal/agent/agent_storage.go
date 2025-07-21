@@ -7,22 +7,24 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
+// Metric types for the agent storage
 type (
 	Gauge   float64
 	Counter int64
 )
 
-// generics for Metric value
+// MetricValue is a type constraint for metric values.
 type MetricValue interface {
 	Gauge | Counter
 }
 
-// struct to hold the metrics collected by the agent
+// AgentStorage holds the metrics collected by the agent.
 type AgentStorage struct {
 	Counters map[string]Counter
 	Gauges   map[string]Gauge
 }
 
+// NewAgentStorage initializes a new AgentStorage instance with empty maps for counters and gauges.
 func NewAgentStorage() *AgentStorage {
 	return &AgentStorage{
 		Counters: make(map[string]Counter),
@@ -30,15 +32,20 @@ func NewAgentStorage() *AgentStorage {
 	}
 }
 
-// Metrics collector methods
+// CollectMetrics collects and store metrics.
 func (s *AgentStorage) CollectMetrics() {
 	logger.Log.Debug("Collecting metrics")
+	s.collectRuntimeMetrics()
+	s.collectAdditionalMetrics()
+}
 
-	// read the metrics from the runtime package
+// collectRuntimeMetrics collects runtime metrics and stores them in the agent storage.
+func (s *AgentStorage) collectRuntimeMetrics() {
+	// Read metrics from the runtime package.
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	// store metrics to the storage
+	// Store metrics to storage.
 	s.Gauges["Alloc"] = Gauge(m.Alloc)
 	s.Gauges["BuckHashSys"] = Gauge(m.BuckHashSys)
 	s.Gauges["Frees"] = Gauge(m.Frees)
@@ -66,8 +73,10 @@ func (s *AgentStorage) CollectMetrics() {
 	s.Gauges["StackSys"] = Gauge(m.StackSys)
 	s.Gauges["Sys"] = Gauge(m.Sys)
 	s.Gauges["TotalAlloc"] = Gauge(m.TotalAlloc)
+}
 
-	// additional values
-	s.Counters["PollCount"]++                       // increment the poll count
-	s.Gauges["RandomValue"] = Gauge(rand.Float64()) // add a random value to the metrics
+// collectAdditionalMetrics adds additional metrics to the agent storage.
+func (s *AgentStorage) collectAdditionalMetrics() {
+	s.Counters["PollCount"]++                       // Increment the poll count
+	s.Gauges["RandomValue"] = Gauge(rand.Float64()) // Add a random value to the metrics.
 }

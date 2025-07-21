@@ -13,21 +13,21 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
-// save current metric values to the file
+// MemStorage is the in-memory server storage for the metrics.
 func (ms *MemStorage) Save(fname string) error {
 	logger.Log.Debugf("saving metrics to %s", fname)
-	// check if the file name is empty -> not saving (used in tests)
+	// Check if the file name is empty -> not saving (used in tests).
 	if fname == "" {
 		return nil
 	}
 
-	// create a copy of the metrics to avoid holding the lock while marshaling
+	// Create a copy of the metrics to avoid holding the lock while marshaling.
 	ms.mu.RLock()
 	gCopy := maps.Clone(ms.Gauge)
 	cCopy := maps.Clone(ms.Counter)
 	ms.mu.RUnlock()
 
-	// marshal the metrics to JSON format
+	// Marshal the metrics to JSON format.
 	data, err := json.MarshalIndent(struct {
 		Gauge   map[string]float64 `json:"gauge"`
 		Counter map[string]int64   `json:"counter"`
@@ -36,11 +36,11 @@ func (ms *MemStorage) Save(fname string) error {
 		return err
 	}
 
-	// check if the directory exists, create it if not
+	// Check if the directory exists, create it if not.
 	if err := os.MkdirAll(filepath.Dir(fname), 0o755); err != nil {
 		return err
 	}
-	// write the data to the file
+	// Write the data to the file.
 	if err := os.WriteFile(fname, data, 0o644); err != nil {
 		return err
 	}
@@ -48,27 +48,27 @@ func (ms *MemStorage) Save(fname string) error {
 	return nil
 }
 
-// load metric values from the file
+// Load reads the metrics from the specified file and restores them to the storage.
 func (ms *MemStorage) Load(fname string) error {
 	logger.Log.Debugf("loading metrics from %s", fname)
-	// check if the file name is empty -> not saving (used in tests)
+	// Check if the file name is empty -> not saving (used in tests).
 	if fname == "" {
 		return nil
 	}
 
-	// check if the file exists
+	// Check if the file exists.
 	data, err := os.ReadFile(fname)
 	if err != nil {
 		return os.ErrNotExist
 	}
 
-	// check if the data is empty
+	// Check if the data is empty.
 	if len(data) == 0 {
 		logger.Log.Warn("storage empty")
 		return nil
 	}
 
-	// unmarshal the data to a temporary struct
+	// Unmarshal the data to a temporary struct.
 	tmp := struct {
 		Gauge   map[string]float64 `json:"gauge"`
 		Counter map[string]int64   `json:"counter"`
@@ -81,7 +81,7 @@ func (ms *MemStorage) Load(fname string) error {
 		return err
 	}
 
-	// update the storage with the loaded metrics
+	// Update the storage with the loaded metrics.
 	ms.mu.Lock()
 	ms.Gauge, ms.Counter = tmp.Gauge, tmp.Counter
 	ms.mu.Unlock()
@@ -90,9 +90,9 @@ func (ms *MemStorage) Load(fname string) error {
 }
 
 // IntervalSaver periodically saves the metrics to the file
-// if the interval is 0, it saves only the server is closing
 func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int, fpath string) {
-	// if the interval is 0, it saves only when the server is closing
+	// If the interval is 0, it saves only when the server is closing.
+	logger.Log.Debugf("starting interval saver with interval %d seconds", interval)
 	if interval == 0 {
 		go func() {
 			<-ctx.Done()
@@ -103,19 +103,19 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int, fpath str
 		return
 	}
 
-	// create a ticker to save the metrics on interval
+	// Create a ticker to save the metrics on interval
 	go func() {
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
 
-		// start ticker loop
+		// Start ticker loop.
 		for {
 			select {
-			case <-ticker.C: // save the metrics on  interval
+			case <-ticker.C: // Save the metrics on interval
 				if err := ms.Save(fpath); err != nil {
 					logger.Log.Errorf("periodic save failed: %v", err)
 				}
-			case <-ctx.Done(): // save the metrics before exiting
+			case <-ctx.Done(): // Save the metrics before exiting
 				if err := ms.Save(fpath); err != nil {
 					logger.Log.Errorf("final save failed: %v", err)
 				}

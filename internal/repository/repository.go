@@ -7,7 +7,7 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
-// MemStorage is the in-memory server storage for the metrics
+// MemStorage is the in-memory server storage for the metrics.
 type MemStorage struct {
 	mu       sync.RWMutex
 	Gauge    map[string]float64 `json:"gauge"`
@@ -16,7 +16,7 @@ type MemStorage struct {
 	fpath    string             `json:"-"`
 }
 
-// MemStorage constructor
+// MemStorage constructor.
 func NewMemStorage(storeInterval int, fpath string) *MemStorage {
 	return &MemStorage{
 		Gauge:    make(map[string]float64),
@@ -26,7 +26,7 @@ func NewMemStorage(storeInterval int, fpath string) *MemStorage {
 	}
 }
 
-// Methods for acting the storage
+// Methods for acting the storage.
 func (ms *MemStorage) SetGauge(name string, value float64) {
 	ms.mu.Lock()
 	ms.Gauge[name] = value
@@ -40,6 +40,7 @@ func (ms *MemStorage) SetGauge(name string, value float64) {
 	}
 }
 
+// GetGauge retrieves the value of a gauge metric by its name.
 func (ms *MemStorage) GetGauge(name string) (float64, bool) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -47,6 +48,7 @@ func (ms *MemStorage) GetGauge(name string) (float64, bool) {
 	return val, ok
 }
 
+// AddCounter increments the value of a counter metric by the given delta.
 func (ms *MemStorage) AddCounter(name string, delta int64) {
 	ms.mu.Lock()
 	ms.Counter[name] += delta
@@ -60,6 +62,7 @@ func (ms *MemStorage) AddCounter(name string, delta int64) {
 	}
 }
 
+// GetCounter retrieves the value of a counter metric by its name.
 func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -67,7 +70,7 @@ func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 	return val, ok
 }
 
-// Get all the saved metrics from the storage and return them and values as strings
+// Get all the saved metrics from the storage and return them and values as strings.
 func (ms *MemStorage) ListAll() map[string]string {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()

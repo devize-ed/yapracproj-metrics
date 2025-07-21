@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func TestSendMetric(t *testing.T) {
 		wantCode int
 	}{
 		{
-			name: "Send metric",
+			name: "send_metric",
 			args: args{
 				metric: "testMetric",
 				value:  111.11,
@@ -41,12 +42,17 @@ func TestSendMetric(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
+	defer srv.Close()
+
 	host := strings.TrimPrefix(srv.URL, "http://")
 	client := resty.New()
+	cfg := config.AgentConfig{Host: host}
+
+	agent := NewAgent(client, cfg)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := SendMetric(client, tt.args.metric, host, tt.args.value); (err != nil) != tt.wantErr {
+			if err := SendMetric(agent, tt.args.metric, tt.args.value); (err != nil) != tt.wantErr {
 				t.Errorf("SendMetric() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -68,7 +74,7 @@ func TestGetMetric(t *testing.T) {
 		wantCode int
 	}{
 		{
-			name: "Send metric",
+			name: "get_metric",
 			args: args{
 				metric: "testMetric",
 			},
@@ -82,13 +88,18 @@ func TestGetMetric(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
+	defer srv.Close()
+
 	host := strings.TrimPrefix(srv.URL, "http://")
 	client := resty.New()
+	cfg := config.AgentConfig{Host: host}
+
+	agent := NewAgent(client, cfg)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := GetMetric(client, tt.args.metric, host, Gauge(0)); (err != nil) != tt.wantErr {
-				t.Errorf("SendMetric() error = %v, wantErr %v", err, tt.wantErr)
+			if err := GetMetric(agent, tt.args.metric, Gauge(0)); (err != nil) != tt.wantErr {
+				t.Errorf("GetMetric() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 		assert.Equal(t, tt.wantCode, http.StatusOK, "Expected status code to be %d", tt.wantCode)

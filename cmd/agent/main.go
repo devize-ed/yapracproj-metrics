@@ -19,21 +19,21 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.GetAgentConfig() // call the function to get agent configuration
+	cfg, err := config.GetAgentConfig() // Get agent configuration.
 	if err != nil {
 		log.Fatal("Failed to get agent config:", err)
 	}
-	// Initialize the logger with the configuration
+	// Initialize the logger with the configuration.
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer logger.Log.Sync()
-	client := resty.New() // init client
+	client := resty.New() // Initialize HTTP client.
 
-	a := agent.NewAgent(client, cfg) // create a new agent instance
-	a.Run()                          // start the agent to collect and report metrics
+	a := agent.NewAgent(client, cfg) // Create a new agent instance.
+	a.Run()                          // Start the agent to collect and report metrics.
 
-	// log the agent start information
+	// Log the agent start information.
 	logger.Log.Info("Agent started with config:",
 		zap.String("address", cfg.Host),
 		zap.Int("poll_interval", cfg.PollInterval),

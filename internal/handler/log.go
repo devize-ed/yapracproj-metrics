@@ -8,20 +8,20 @@ import (
 )
 
 type (
-	// Hold the status code and size of the response
+	// Hold the status code and size of the response.
 	responseData struct {
 		status int
 		size   int
 	}
 
-	// custom ResponseWriter with capture of response data
+	// Custom ResponseWriter with capture of response data.
 	loggingResponseWriter struct {
 		http.ResponseWriter
 		responseData *responseData
 	}
 )
 
-// Redefine the Write and WriteHeader methods to capture response data
+// Redefine the Write and WriteHeader methods to capture response data.
 func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 	size, err := r.ResponseWriter.Write(b)
 	r.responseData.size += size
@@ -33,7 +33,7 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.responseData.status = statusCode
 }
 
-// middleware for logging HTTP requests (URI, method, processing time, response status, size)
+// MiddlewareLogging is a middleware for logging HTTP requests (URI, method, processing time, response status, size)
 func MiddlewareLogging(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
