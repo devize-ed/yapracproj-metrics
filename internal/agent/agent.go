@@ -1,132 +1,177 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
-	"log"
-	"math/rand/v2"
-	"reflect"
-	"runtime"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-resty/resty/v2"
 )
 
-// holds the client, storage and configuration for the agent
+// Agent holds the HTTP client, metric storage, and configuration.
 type Agent struct {
 	client  *resty.Client
 	storage *AgentStorage
 	config  config.AgentConfig
 }
 
-// initializes a new Agent instance with the provided client and cfg
+// NewAgent returns a new Agent that uses the given HTTP client and configuration.
 func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 	return &Agent{
 		client:  client,
-		storage: &AgentStorage{},
+		storage: NewAgentStorage(),
 		config:  config,
 	}
 }
 
 func (a *Agent) Run() error {
-	// convert the interval values to time.Duration
+	// Convert interval values to time.Duration.
 	timePollInterval := time.Duration(a.config.PollInterval) * time.Second
 	timeReportInterval := time.Duration(a.config.ReportInterval) * time.Second
 
-	// set up the ticker for polling and reporting
+	// Set up the tickers for polling and reporting.
 	pollTicker := time.NewTicker(timePollInterval)
 	defer pollTicker.Stop()
 	reportTicker := time.NewTicker(timeReportInterval)
 	defer reportTicker.Stop()
 
-	// start agent loop
+	// Start the agent loop.
 	for {
 		select {
-		case <-pollTicker.C: // collect metrics at the polling interval
+		case <-pollTicker.C: // Collect metrics at the polling interval.
 			a.storage.CollectMetrics()
-		case <-reportTicker.C: // send metrics at the reporting interval
-			fmt.Println("Reporting metrics...")
+		case <-reportTicker.C: // Send metrics at the reporting interval.
+			logger.Log.Debug("Reporting metrics...")
 
-			// iterate over the agent storage and send metrics to the server
-			val := reflect.ValueOf(a.storage).Elem()
-			typ := reflect.TypeOf(a.storage).Elem()
-
-			for i := 0; i < val.NumField(); i++ {
-				metric := typ.Field(i).Name
-				value := val.Field(i)
-				// fmt.Printf("%s = %v\n", metric, value)
-				SendMetric(a.client, metric, fmt.Sprint(value), a.config.Host)
+			// Check whether “test‑get” mode is enabled.
+			if !a.config.EnableTestGet {
+				// Iterate over the storage and send metrics to the server.
+				for name, val := range a.storage.Counters {
+					if err := SendMetric(a, name, val); err != nil {
+						logger.Log.Error("error sending ", name, ": ", err)
+					}
+				}
+				for name, val := range a.storage.Gauges {
+					if err := SendMetric(a, name, val); err != nil {
+						logger.Log.Error("error sending ", name, ": ", err)
+					}
+				}
+			} else {
+				// “Test‑get” mode: request metrics from the server.
+				for name, val := range a.storage.Counters {
+					if err := GetMetric(a, name, val); err != nil {
+						logger.Log.Error("error getting ", name, ": ", err)
+					}
+				}
+				for name, val := range a.storage.Gauges {
+					if err := GetMetric(a, name, val); err != nil {
+						logger.Log.Error("error getting ", name, ": ", err)
+					}
+				}
 			}
 		}
 	}
 }
 
-// Sends a metric to the server
-func SendMetric(client *resty.Client, metric, value, host string) error {
-
-	log.Println("SendMetric requested for metric: ", metric, " = ", value)
-
-	// set the metric type as gauge by default, change it for counter if metric == "PollCount"
-	var mtype = models.Gauge
-	if metric == "PollCount" {
-		mtype = models.Counter
+// SendMetric sends a single metric to the server.
+func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
+	endpoint := fmt.Sprintf("http://%s/update/", a.config.Host)
+	body := models.Metrics{
+		ID: metric,
 	}
 
-	// build the request URL and call the POST method request to the server	//
-	endpoint := fmt.Sprintf("http://%s/update/%s/%s/%s", host, mtype, metric, value)
-	resp, err := client.R().
-		SetHeader("Content-Type", "text/plain; charset=utf-8").
-		Post(endpoint)
+	// Set the value and metric type.
+	switch v := any(value).(type) {
+	case Gauge:
+		body.MType = models.Gauge
+		floatValue := float64(v)
+		body.Value = &floatValue
+	case Counter:
+		body.MType = models.Counter
+		intValue := int64(v)
+		body.Delta = &intValue
+	default:
+		return fmt.Errorf("unsupported metric type %T", v)
+	}
+
+	err := a.Request(metric, endpoint, body)
 	if err != nil {
-		log.Println("Error sending ", metric, ": ", err)
-		return err
+		return fmt.Errorf("failed to send: %v", err)
 	}
-
-	// logging the response status code
-	log.Println("Response status-code: ", resp.StatusCode())
 	return nil
 }
 
-// Metrics collector methods
-func (m *AgentStorage) CollectMetrics() {
-	log.Println("Collecting metrics...")
+// GetMetric requests a metric from the server for testing purposes.
+func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
+	endpoint := fmt.Sprintf("http://%s/value/", a.config.Host)
 
-	// read the metrics from the runtime package
-	var stats runtime.MemStats
-	runtime.ReadMemStats(&stats)
+	body := models.Metrics{
+		ID: metric,
+	}
 
-	// store metrics to the struct
-	m.Alloc = stats.Alloc
-	m.BuckHashSys = stats.BuckHashSys
-	m.Frees = stats.Frees
-	m.GCCPUFraction = stats.GCCPUFraction
-	m.GCSys = stats.GCSys
-	m.HeapAlloc = stats.HeapAlloc
-	m.HeapIdle = stats.HeapIdle
-	m.HeapInuse = stats.HeapInuse
-	m.HeapObjects = stats.HeapObjects
-	m.HeapReleased = stats.HeapReleased
-	m.HeapSys = stats.HeapSys
-	m.LastGC = stats.LastGC
-	m.Lookups = stats.Lookups
-	m.MCacheInuse = stats.MCacheInuse
-	m.MCacheSys = stats.MCacheSys
-	m.MSpanInuse = stats.MSpanInuse
-	m.MSpanSys = stats.MSpanSys
-	m.Mallocs = stats.Mallocs
-	m.NextGC = stats.NextGC
-	m.NumForcedGC = stats.NumForcedGC
-	m.NumGC = stats.NumGC
-	m.OtherSys = stats.OtherSys
-	m.PauseTotalNs = stats.PauseTotalNs
-	m.StackInuse = stats.StackInuse
-	m.StackSys = stats.StackSys
-	m.Sys = stats.Sys
-	m.TotalAlloc = stats.TotalAlloc
+	switch v := any(value).(type) {
+	case Gauge:
+		body.MType = models.Gauge
+	case Counter:
+		body.MType = models.Counter
+	default:
+		return fmt.Errorf("unsupported metric type %T", v)
+	}
 
-	m.PollCount++                  // increment the poll count
-	m.RandomValue = rand.Float64() // adda random value to the metrics
+	err := a.Request(metric, endpoint, body)
+	if err != nil {
+		return fmt.Errorf("failed to send: %v", err)
+	}
+	return nil
+}
 
-	log.Println("All metrics collected")
+func (a Agent) Request(metric string, endpoint string, body models.Metrics) error {
+	req := a.client.R().
+		SetHeader("Content-Type", "application/json")
+
+	switch a.config.EnableGzip {
+	case true:
+		buf, err := Compress(body)
+		if err != nil {
+			return fmt.Errorf("failed to compress request body: %v", err)
+		}
+		req.SetHeader("Content-Encoding", "gzip").
+			SetHeader("Accept-Encoding", "gzip").
+			SetBody(buf) // Use the compressed request body.
+	case false:
+		req.SetBody(body) // Use the uncompressed request body.
+	}
+
+	logger.Log.Debugf("Request body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
+	logger.Log.Debug("Request header", req.Header)
+
+	resp, err := req.Post(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to POST request: %v", err)
+	}
+
+	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
+	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
+	return nil
+}
+
+func Compress(data models.Metrics) ([]byte, error) {
+	// Marshal the body to JSON.
+	jsonBody, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling request body: %v", err)
+	}
+
+	// Compress the JSON body.
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, _ = zw.Write(jsonBody)
+	_ = zw.Close()
+
+	return buf.Bytes(), nil
 }

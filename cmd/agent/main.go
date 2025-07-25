@@ -1,18 +1,41 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/agent"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/go-resty/resty/v2"
 )
 
 func main() {
-	cfg := config.GetAgentConfig() // call the function to parse cl flags
-	client := resty.New()          // init client
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
 
-	a := agent.NewAgent(client, cfg) // create a new agent instance
-	a.Run()                          // start the agent to collect and report metrics
-	log.Println("Agent started with config:", cfg)
+}
+
+func run() error {
+	cfg, err := config.GetAgentConfig() // Get agent configuration.
+	if err != nil {
+		return fmt.Errorf("failed to get agent config: %w", err)
+	}
+	// Initialize the logger with the configuration.
+	if err := logger.Initialize(cfg.LogLevel); err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	defer logger.Log.Sync()
+
+	// Log the agent start information.
+	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",
+		cfg.PollInterval, cfg.ReportInterval, cfg.Host, cfg.EnableGzip)
+
+	client := resty.New() // Initialize HTTP client.
+
+	a := agent.NewAgent(client, cfg) // Create a new agent instance.
+	a.Run()                          // Start the agent to collect and report metrics.
+
+	return nil
 }

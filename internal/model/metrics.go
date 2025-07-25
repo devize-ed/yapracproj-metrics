@@ -13,7 +13,7 @@ const (
 type Metrics struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
+	Delta *int64   `json:"delta,omitempty"` // for counter
+	Value *float64 `json:"value,omitempty"` // for gauge
 	Hash  string   `json:"hash,omitempty"`
 }
