@@ -60,7 +60,7 @@ func TestGetServerConfig(t *testing.T) {
 				StoreInterval: 300,
 				FPath:         "./metrics_storage.json",
 				Restore:       false,
-				DatabaseDSN:   "unconfigured_db",
+				DatabaseDSN:   "",
 				LogLevel:      "debug",
 			},
 			wantErr: false,
