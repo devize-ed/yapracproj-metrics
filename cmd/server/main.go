@@ -45,16 +45,11 @@ func run() error {
 	}
 
 	// initialize the database connection if a DSN is provided
-	var db *sql.DB
-	if cfg.DatabaseDSN != "" {
-		db, err = initDBConnection(cfg)
-		if err != nil {
-			return fmt.Errorf("failed to initialize db connection: %w", err)
-		}
-	} else {
-		db = nil
-		logger.Log.Debug("No database DSN provided, skipping database initialization")
+	db, err := initDBConnection(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize db connection: %w", err)
 	}
+
 	defer db.Close()
 
 	// create a context that listens for OS signals to shut down the server
@@ -88,6 +83,12 @@ func initStorage(cfg config.ServerConfig) (*st.MemStorage, error) {
 }
 
 func initDBConnection(cfg config.ServerConfig) (*sql.DB, error) {
+	// Check if the database DSN is provided
+	if cfg.DatabaseDSN == "" {
+		logger.Log.Debug("No database DSN provided, skipping database initialization")
+		return nil, nil
+	}
+
 	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
 	// Open a database connection using loaded configuration
 	db, err := sql.Open("pgx", cfg.DatabaseDSN)
