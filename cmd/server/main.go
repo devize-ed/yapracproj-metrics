@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
@@ -39,8 +41,15 @@ func run() error {
 	// create a new in-memory storage
 	ms, err := initStorage(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
+
+	// initialize the database connection if a DSN is provided
+	db, err := initDBConnection(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize db connection: %w", err)
+	}
+	defer db.Close()
 
 	// create a context that listens for OS signals to shut down the server
 	ctx, stop := signal.NotifyContext(context.Background(),
@@ -51,7 +60,7 @@ func run() error {
 	ms.IntervalSaver(ctx, cfg.StoreInterval, cfg.FPath)
 
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(ms)
+	h := handler.NewHandler(ms, db)
 	srv := server.NewServer(cfg, ms, h)
 
 	if err = srv.Serve(ctx); err != nil {
@@ -70,4 +79,22 @@ func initStorage(cfg config.ServerConfig) (*st.MemStorage, error) {
 		}
 	}
 	return ms, nil
+}
+
+func initDBConnection(cfg config.ServerConfig) (*sql.DB, error) {
+	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
+	// Open a database connection using loaded configuration
+	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open sql driver: %w", err)
+	}
+
+	// Ping the database to ensure the connection is established
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping db: %w", err)
+	}
+	logger.Log.Debug("Database connection established successfully")
+	return db, nil
 }

@@ -16,6 +16,6 @@ func (h *Handler) NewRouter() http.Handler {
 	r.Post("/value", h.GetMetricJSONHandler())
 	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())
 	r.Get("/", h.ListMetricsHandler())
-
+	r.Get("/ping", h.PingHandler())
 	return r
 }

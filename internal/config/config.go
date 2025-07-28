@@ -14,6 +14,7 @@ type ServerConfig struct {
 	StoreInterval int    `env:"STORE_INTERVAL"`
 	FPath         string `env:"FILE_STORAGE_PATH"`
 	Restore       bool   `env:"RESTORE"`
+	DatabaseDSN   string `env:"DATABASE_DSN"`                 // string for the database connection.
 	LogLevel      string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
 }
 
@@ -35,6 +36,7 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.Host, "a", "localhost:8080", "address of HTTP server")
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "store interval in seconds")
 	flag.StringVar(&cfg.FPath, "f", "./metrics_storage.json", "file path for storing metrics")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "unconfigured_db", "string for the database connection")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
 
 	// Parse flags.
