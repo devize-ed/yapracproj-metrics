@@ -62,7 +62,7 @@ func run() error {
 
 	// create a new HTTP server with the configuration and handler
 	h := handler.NewHandler(ms, db)
-	srv := server.NewServer(cfg, ms, h)
+	srv := server.NewServer(cfg, ms, h.NewRouter())
 
 	if err = srv.Serve(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)

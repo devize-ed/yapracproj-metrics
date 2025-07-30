@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
@@ -19,27 +18,27 @@ type Repository interface {
 
 // Server wraps an *http.Server and adds storage and configuration.
 type Server struct {
-	*http.Server
+	httpSrv *http.Server
 	storage Repository
 	cfg     config.ServerConfig
 }
 
 // NewServer constructs the HTTP server using config and storage.
-func NewServer(cfg config.ServerConfig, storage Repository, h *handler.Handler) *Server {
+func NewServer(cfg config.ServerConfig, storage Repository, h http.Handler) *Server {
 	s := &Server{
 		storage: storage,
 		cfg:     cfg,
 	}
-	s.Server = &http.Server{
+	s.httpSrv = &http.Server{
 		Addr:    cfg.Host,
-		Handler: h.NewRouter(),
+		Handler: h,
 	}
 	return s
 }
 
 // Shutdown passes through to the embedded http.Server.
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.Server.Shutdown(ctx)
+	return s.httpSrv.Shutdown(ctx)
 }
 
 // Serve starts the HTTP server, blocks until ctx is cancelled, provide shutdown and save metrics.
@@ -47,7 +46,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	// Start the HTTP server in a goroutine.
 	go func() {
 		logger.Log.Infof("HTTP server listening on %s", s.cfg.Host)
-		if err := s.ListenAndServe(); err != nil &&
+		if err := s.httpSrv.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
 			logger.Log.Errorf("listen error: %v", err)
 		} else {
