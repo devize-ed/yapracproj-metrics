@@ -8,7 +8,7 @@ import (
 )
 
 func newTestStorage() *MemStorage {
-	return NewMemStorage(0, "")
+	return NewMemStorage(0, NewStubRepository())
 }
 
 func TestMemStorage_SetGauge(t *testing.T) {

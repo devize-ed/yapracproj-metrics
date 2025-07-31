@@ -2,18 +2,17 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	st "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fsaver"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
@@ -71,37 +70,26 @@ func run() error {
 	return nil
 }
 
+// initDBConnection initializes the database connection based on the provided configuration.
 func initStorage(cfg config.ServerConfig) (*st.MemStorage, error) {
-	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)
+	// Initialize the repository based on the configuration
+	var repository st.Repository
+	if cfg.DatabaseDSN != "" {
+		repository = db.NewDBRepository(cfg.DatabaseDSN)
+	} else if cfg.FPath != "" {
+		repository = fsaver.NewFileSaver(cfg.FPath)
+	} else {
+		repository = st.NewStubRepository()
+	}
 
+	// Create a new in-memory storage
+	ms := st.NewMemStorage(cfg.StoreInterval, repository)
+
+	// If restore is enabled, load the metrics from the repository
 	if cfg.Restore {
-		if err := ms.Load(cfg.FPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := ms.LoadFromRepo(); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("load metrics: %w", err)
 		}
 	}
 	return ms, nil
-}
-
-func initDBConnection(cfg config.ServerConfig) (*sql.DB, error) {
-	// Check if the database DSN is provided
-	if cfg.DatabaseDSN == "" {
-		logger.Log.Debug("No database DSN provided, skipping database initialization")
-		return nil, nil
-	}
-
-	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
-	// Open a database connection using loaded configuration
-	db, err := sql.Open("pgx", cfg.DatabaseDSN)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open sql driver: %w", err)
-	}
-
-	// Ping the database to ensure the connection is established
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping db: %w", err)
-	}
-	logger.Log.Debug("Database connection established successfully")
-	return db, nil
 }

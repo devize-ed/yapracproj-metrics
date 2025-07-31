@@ -1,5 +1,4 @@
-// repository/storage_persist_test.go
-package repository
+package fsaver
 
 import (
 	"context"
@@ -55,7 +54,7 @@ func TestStorage_SaveAndLoad(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := tmpFilePath(t)
 
-			src := NewMemStorage(0, path)
+			src := NewMemStorage(0, )
 			for _, g := range tt.gauge {
 				src.SetGauge(g.k, g.v)
 			}
