@@ -2,27 +2,27 @@ package db
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config/db"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
 // FileSaver is a struct that implements the Repository interface for saving metrics to a file.
 type DB struct {
 	db *db.DB
+	Close()	error
 }
 
 // NewFileSaver constructs a new FileSaver with the provided file name.
-func NewDB(ctx context.Context, DSN string) *DB {
-	if db := db.NewDB(ctx, DSN); db == nil {
-		logger.Log.Fatal("failed to initialize database connection")
-		return DB{
-			db: db.NewDB(ctx, DSN),
-		}
+func NewDBRepository(ctx context.Context, DSN string) (*DB, error) {
+	db, err := db.NewDB(ctx, DSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize a DB store: %w", err)
 	}
+	return &DB{
+		db: db,
+	}, nil
 }
-
-
 
 // Save writes the metrics to the specified file in JSON format.
 func (d *DB) Save(gauge map[string]float64, counter map[string]int64) error {

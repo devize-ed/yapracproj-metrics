@@ -35,7 +35,7 @@ func GetServerConfig() (ServerConfig, error) {
 	// Set CLI flags.
 	flag.StringVar(&cfg.Host, "a", "localhost:8080", "address of HTTP server")
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "store interval in seconds")
-	flag.StringVar(&cfg.FPath, "f", "./metrics_storage.json", "file path for storing metrics")
+	flag.StringVar(&cfg.FPath, "f", "", "file path for storing metrics")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "string for the database connection")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
 

@@ -10,7 +10,7 @@ import (
 
 // DB represents a database connection pool.
 type DB struct {
-	pool *pgxpool.Pool
+	Pool *pgxpool.Pool
 }
 
 // NewDB provides the new data base connection with the provided configuration.
@@ -23,7 +23,7 @@ func NewDB(ctx context.Context, dsn string) (*DB, error) {
 
 	logger.Log.Debug("Database connection established successfully")
 	return &DB{
-		pool: pool,
+		Pool: pool,
 	}, nil
 }
 
@@ -51,30 +51,6 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 // Close closes the database connection pool.
 func (db *DB) Close() error {
-	db.pool.Close()
+	db.Pool.Close()
 	return nil
 }
-
-// func initDBConnection(cfg config.ServerConfig) (*sql.DB, error) {
-// 	// Check if the database DSN is provided
-// 	if cfg.DatabaseDSN == "" {
-// 		logger.Log.Debug("No database DSN provided, skipping database initialization")
-// 		return nil, nil
-// 	}
-
-// 	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
-// 	// Open a database connection using loaded configuration
-// 	db, err := sql.Open("pgx", cfg.DatabaseDSN)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to open sql driver: %w", err)
-// 	}
-
-// 	// Ping the database to ensure the connection is established
-// 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-// 	defer cancel()
-// 	if err := db.PingContext(ctx); err != nil {
-// 		return nil, fmt.Errorf("failed to ping db: %w", err)
-// 	}
-// 	logger.Log.Debug("Database connection established successfully")
-// 	return db, nil
-// }

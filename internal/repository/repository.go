@@ -13,8 +13,8 @@ import (
 
 // Repository interface defines the methods for saving and loading metrics.
 type Repository interface {
-	Save(gauge map[string]float64, counter map[string]int64) error
-	Load() (map[string]float64, map[string]int64, error)
+	Save(ctx context.Context, gauge map[string]float64, counter map[string]int64) error
+	Load(ctx context.Context) (map[string]float64, map[string]int64, error)
 }
 
 // MemStorage is the in-memory server storage for the metrics.
@@ -37,13 +37,13 @@ func NewMemStorage(storeInterval int, r Repository) *MemStorage {
 }
 
 // SetGauge sets the value of a gauge metric by its name.
-func (ms *MemStorage) SetGauge(name string, value float64) {
+func (ms *MemStorage) SetGauge(ctx context.Context, name string, value float64) {
 	ms.mu.Lock()
 	ms.Gauge[name] = value
 	ms.mu.Unlock()
 
 	if ms.syncSave {
-		err := ms.SaveToRepo()
+		err := ms.SaveToRepo(ctx)
 		if err != nil {
 			logger.Log.Errorf("failed to save metrics: %v", err)
 		}
@@ -51,7 +51,7 @@ func (ms *MemStorage) SetGauge(name string, value float64) {
 }
 
 // GetGauge retrieves the value of a gauge metric by its name.
-func (ms *MemStorage) GetGauge(name string) (float64, bool) {
+func (ms *MemStorage) GetGauge(ctx context.Context, name string) (float64, bool) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	val, ok := ms.Gauge[name]
@@ -59,13 +59,13 @@ func (ms *MemStorage) GetGauge(name string) (float64, bool) {
 }
 
 // AddCounter increments the value of a counter metric by the given delta.
-func (ms *MemStorage) AddCounter(name string, delta int64) {
+func (ms *MemStorage) AddCounter(ctx context.Context, name string, delta int64) {
 	ms.mu.Lock()
 	ms.Counter[name] += delta
 	ms.mu.Unlock()
 
 	if ms.syncSave {
-		err := ms.SaveToRepo()
+		err := ms.SaveToRepo(ctx)
 		if err != nil {
 			logger.Log.Errorf("failed to save metrics: %v", err)
 		}
@@ -73,7 +73,7 @@ func (ms *MemStorage) AddCounter(name string, delta int64) {
 }
 
 // GetCounter retrieves the value of a counter metric by its name.
-func (ms *MemStorage) GetCounter(name string) (int64, bool) {
+func (ms *MemStorage) GetCounter(ctx context.Context, name string) (int64, bool) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	val, ok := ms.Counter[name]
@@ -81,7 +81,7 @@ func (ms *MemStorage) GetCounter(name string) (int64, bool) {
 }
 
 // Get all the saved metrics from the storage and return them and values as strings.
-func (ms *MemStorage) ListAll() map[string]string {
+func (ms *MemStorage) ListAll(ctx context.Context) map[string]string {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	result := make(map[string]string)
@@ -95,7 +95,7 @@ func (ms *MemStorage) ListAll() map[string]string {
 }
 
 // SaveToRepo writes the metrics to the repository.
-func (ms *MemStorage) SaveToRepo() error {
+func (ms *MemStorage) SaveToRepo(ctx context.Context) error {
 
 	// copy the metrics to avoid holding the lock while saving.
 	ms.mu.RLock()
@@ -104,7 +104,7 @@ func (ms *MemStorage) SaveToRepo() error {
 	ms.mu.RUnlock()
 
 	// Save the metrics to the repository.
-	if err := ms.repository.Save(gCopy, cCopy); err != nil {
+	if err := ms.repository.Save(ctx, gCopy, cCopy); err != nil {
 		return fmt.Errorf("failed to save metrics: %w", err)
 	}
 	return nil
@@ -112,9 +112,9 @@ func (ms *MemStorage) SaveToRepo() error {
 }
 
 // LoadFromRepo retrieves the metrics from the repository and restores them to the storage.
-func (ms *MemStorage) LoadFromRepo() error {
+func (ms *MemStorage) LoadFromRepo(ctx context.Context) error {
 	// Load the metrics from the repository.
-	gauge, counter, err := ms.repository.Load()
+	gauge, counter, err := ms.repository.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load metrics: %w", err)
 	}
@@ -129,13 +129,13 @@ func (ms *MemStorage) LoadFromRepo() error {
 }
 
 // IntervalSaver periodically saves the metrics to the file
-func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int, fpath string) {
+func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 	// If the interval is 0, it saves only when the server is closing.
 	logger.Log.Debugf("starting interval saver with interval %d seconds", interval)
 	if interval == 0 {
 		go func() {
 			<-ctx.Done()
-			if err := ms.SaveToRepo(); err != nil {
+			if err := ms.SaveToRepo(ctx); err != nil {
 				logger.Log.Errorf("final save (sync mode) failed: %v", err)
 			}
 		}()
@@ -151,11 +151,11 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int, fpath str
 		for {
 			select {
 			case <-ticker.C: // Save the metrics on interval
-				if err := ms.SaveToRepo(); err != nil {
+				if err := ms.SaveToRepo(ctx); err != nil {
 					logger.Log.Errorf("periodic save failed: %v", err)
 				}
 			case <-ctx.Done(): // Save the metrics before exiting
-				if err := ms.SaveToRepo(); err != nil {
+				if err := ms.SaveToRepo(ctx); err != nil {
 					logger.Log.Errorf("final save failed: %v", err)
 				}
 				return

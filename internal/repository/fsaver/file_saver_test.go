@@ -53,8 +53,8 @@ func TestStorage_SaveAndLoad(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := tmpFilePath(t)
-
-			src := NewMemStorage(0, )
+			pers := NewFilePersister(path)
+			src := NewMemStorage(0, pers)
 			for _, g := range tt.gauge {
 				src.SetGauge(g.k, g.v)
 			}
@@ -62,10 +62,10 @@ func TestStorage_SaveAndLoad(t *testing.T) {
 				src.AddCounter(c.k, c.v)
 			}
 
-			require.NoError(t, src.Save(path), "save failed")
+			require.NoError(t, src.Save(), "save failed")
 
-			dst := NewMemStorage(0, path)
-			require.NoError(t, dst.Load(path), "load failed")
+			dst := NewMemStorage(0, pers)
+			require.NoError(t, dst.Load(), "load failed")
 
 			for _, g := range tt.gauge {
 				val, ok := dst.GetGauge(g.k)
@@ -84,12 +84,12 @@ func TestStorage_SaveAndLoad(t *testing.T) {
 func TestStorage_IntervalSaver(t *testing.T) {
 	t.Run("periodic_save", func(t *testing.T) {
 		path := tmpFilePath(t)
-		st := NewMemStorage(1, path) // without save
+		st := NewMemStorage(1, NewFilePersister(path)) // without save
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		st.IntervalSaver(ctx, 1, path)
+		st.IntervalSaver(ctx, 1)
 
 		st.SetGauge("TestGauge", 123.11)
 
@@ -101,8 +101,8 @@ func TestStorage_IntervalSaver(t *testing.T) {
 		cancel()
 		time.Sleep(50 * time.Millisecond)
 
-		check := NewMemStorage(0, path)
-		require.NoError(t, check.Load(path))
+		check := NewMemStorage(0, NewFilePersister(path))
+		require.NoError(t, check.Load())
 		val, ok := check.GetGauge("TestGauge")
 		assert.True(t, ok)
 		assert.Equal(t, 123.11, val)
@@ -110,20 +110,20 @@ func TestStorage_IntervalSaver(t *testing.T) {
 
 	t.Run("sync_save", func(t *testing.T) {
 		path := tmpFilePath(t)
-		st := NewMemStorage(0, path) //turn on sync save
+		st := NewMemStorage(0, NewFilePersister(path)) //turn on sync save
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		st.IntervalSaver(ctx, 0, path) // sync mode
+		st.IntervalSaver(ctx, 0) // sync mode
 
 		st.SetGauge("TestGauge", 123.4)
 
 		_, err := os.Stat(path)
 		require.NoError(t, err, "file should be created for sync save")
 
-		load := NewMemStorage(0, path)
-		require.NoError(t, load.Load(path))
+		load := NewMemStorage(0, NewFilePersister(path))
+		require.NoError(t, load.Load())
 		v, ok := load.GetGauge("TestGauge")
 		assert.True(t, ok)
 		assert.Equal(t, 123.4, v)

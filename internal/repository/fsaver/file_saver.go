@@ -1,6 +1,7 @@
 package fsaver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,7 +25,7 @@ func NewFileSaver(fname string) *FileSaver {
 }
 
 // Save writes the metrics to the specified file in JSON format.
-func (f *FileSaver) Save(gauge map[string]float64, counter map[string]int64) error {
+func (f *FileSaver) Save(ctx context.Context, gauge map[string]float64, counter map[string]int64) error {
 	logger.Log.Debugf("saving metrics to %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {
@@ -53,7 +54,7 @@ func (f *FileSaver) Save(gauge map[string]float64, counter map[string]int64) err
 }
 
 // Load reads the metrics from the specified file and restores them to the storage.
-func (f *FileSaver) Load() (map[string]float64, map[string]int64, error) {
+func (f *FileSaver) Load(ctx context.Context) (map[string]float64, map[string]int64, error) {
 	logger.Log.Debugf("loading metrics from %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {

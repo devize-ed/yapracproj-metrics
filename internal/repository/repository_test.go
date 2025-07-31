@@ -2,9 +2,13 @@
 package repository
 
 import (
+	"context"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestStorage() *MemStorage {
@@ -159,4 +163,56 @@ func TestMemStorage_GetCounter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStorage_IntervalSaver(t *testing.T) {
+	t.Run("periodic_save", func(t *testing.T) {
+		path := tmpFilePath(t)
+		st := NewMemStorage(1, NewFilePersister(path)) // without save
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		st.IntervalSaver(ctx, 1)
+
+		st.SetGauge("TestGauge", 123.11)
+
+		time.Sleep(2 * time.Second) // wait for the ticker to tick
+
+		_, err := os.Stat(path)
+		assert.NoError(t, err, "file should be created after the interval")
+
+		cancel()
+		time.Sleep(50 * time.Millisecond)
+
+		check := NewMemStorage(0, NewFilePersister(path))
+		require.NoError(t, check.Load())
+		val, ok := check.GetGauge("TestGauge")
+		assert.True(t, ok)
+		assert.Equal(t, 123.11, val)
+	})
+
+	t.Run("sync_save", func(t *testing.T) {
+		path := tmpFilePath(t)
+		st := NewMemStorage(0, NewFilePersister(path)) //turn on sync save
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		st.IntervalSaver(ctx, 0) // sync mode
+
+		st.SetGauge("TestGauge", 123.4)
+
+		_, err := os.Stat(path)
+		require.NoError(t, err, "file should be created for sync save")
+
+		load := NewMemStorage(0, NewFilePersister(path))
+		require.NoError(t, load.Load())
+		v, ok := load.GetGauge("TestGauge")
+		assert.True(t, ok)
+		assert.Equal(t, 123.4, v)
+
+		cancel()
+		time.Sleep(1 * time.Second) // wait for the goroutine to finish
+	})
 }

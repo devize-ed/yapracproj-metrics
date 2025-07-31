@@ -14,7 +14,7 @@ import (
 
 // Repository matches the storage contract used by handler and mem‑storage.
 type Repository interface {
-	Save(path string) error
+	Save() error
 }
 
 // Server wraps an *http.Server and adds storage and configuration.
@@ -68,7 +68,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	// Save metrics before the exit.
 	logger.Log.Debug("Saving before exit ...")
-	if err := s.storage.Save(s.cfg.FPath); err != nil {
+	if err := s.storage.Save(); err != nil {
 		return fmt.Errorf("failed to save on exit: %w", err)
 	}
 	return nil

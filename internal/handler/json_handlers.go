@@ -38,7 +38,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty counter value", http.StatusNotFound)
 				return
 			}
-			h.storage.AddCounter(metricName, metricValue)
+			h.storage.AddCounter(r.Context(), metricName, metricValue)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
@@ -49,7 +49,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty gauge value", http.StatusNotFound)
 				return
 			}
-			h.storage.SetGauge(metricName, metricValue)
+			h.storage.SetGauge(r.Context(), metricName, metricValue)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
 		default:
@@ -90,23 +90,23 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 		switch metricType {
 		case models.Counter:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			got, ok := h.storage.GetCounter(metricName)
+			got, ok := h.storage.GetCounter(r.Context(), metricName)
 			if ok {
 				body.Delta = &got
 			} else {
 				logger.Log.Error("Requested metric not found: ", metricName)
-				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
+				logger.Log.Debugln("Available metrics: ", h.storage.ListAll(r.Context()))
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
 		case models.Gauge:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			got, ok := h.storage.GetGauge(metricName)
+			got, ok := h.storage.GetGauge(r.Context(), metricName)
 			if ok {
 				body.Value = &got
 			} else {
 				logger.Log.Error("Requested metric not found: ", metricName)
-				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
+				logger.Log.Debugln("Available metrics: ", h.storage.ListAll(r.Context()))
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}

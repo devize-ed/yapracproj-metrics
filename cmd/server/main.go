@@ -12,6 +12,7 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	st "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	db "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fsaver"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
@@ -42,14 +43,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
-
-	// initialize the database connection if a DSN is provided
-	db, err := initDBConnection(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to initialize db connection: %w", err)
-	}
-
-	defer db.Close()
 
 	// create a context that listens for OS signals to shut down the server
 	ctx, stop := signal.NotifyContext(context.Background(),
