@@ -12,7 +12,7 @@ import (
 )
 
 // Repository interface defines the methods for saving and loading metrics.
-type Repository interface {
+type ExtStorage interface {
 	Save(ctx context.Context, gauge map[string]float64, counter map[string]int64) error
 	Load(ctx context.Context) (map[string]float64, map[string]int64, error)
 }
@@ -20,19 +20,19 @@ type Repository interface {
 // MemStorage is the in-memory server storage for the metrics.
 type MemStorage struct {
 	mu         sync.RWMutex
-	Gauge      map[string]float64 `json:"gauge"`
-	Counter    map[string]int64   `json:"counter"`
-	syncSave   bool               `json:"-"`
-	repository Repository         `json:"-"`
+	Gauge      map[string]float64
+	Counter    map[string]int64
+	syncSave   bool
+	ExtStorage ExtStorage
 }
 
 // MemStorage constructor.
-func NewMemStorage(storeInterval int, r Repository) *MemStorage {
+func NewMemStorage(storeInterval int, es ExtStorage) *MemStorage {
 	return &MemStorage{
 		Gauge:      make(map[string]float64),
 		Counter:    make(map[string]int64),
 		syncSave:   storeInterval == 0,
-		repository: r,
+		ExtStorage: es,
 	}
 }
 
@@ -104,7 +104,7 @@ func (ms *MemStorage) SaveToRepo(ctx context.Context) error {
 	ms.mu.RUnlock()
 
 	// Save the metrics to the repository.
-	if err := ms.repository.Save(ctx, gCopy, cCopy); err != nil {
+	if err := ms.ExtStorage.Save(ctx, gCopy, cCopy); err != nil {
 		return fmt.Errorf("failed to save metrics: %w", err)
 	}
 	return nil
@@ -114,7 +114,7 @@ func (ms *MemStorage) SaveToRepo(ctx context.Context) error {
 // LoadFromRepo retrieves the metrics from the repository and restores them to the storage.
 func (ms *MemStorage) LoadFromRepo(ctx context.Context) error {
 	// Load the metrics from the repository.
-	gauge, counter, err := ms.repository.Load(ctx)
+	gauge, counter, err := ms.ExtStorage.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load metrics: %w", err)
 	}
