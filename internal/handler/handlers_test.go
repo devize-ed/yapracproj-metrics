@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,9 +14,10 @@ import (
 )
 
 func testMemoryStorage(ms *storage.MemStorage) {
-	ms.AddCounter("testCounter", 5)
-	ms.SetGauge("testGauge1", 10.5)
-	ms.SetGauge("testGauge2", 10.5)
+	ctx := context.Background()
+	ms.AddCounter(ctx, "testCounter", 5)
+	ms.SetGauge(ctx, "testGauge1", 10.5)
+	ms.SetGauge(ctx, "testGauge2", 10.5)
 }
 
 func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp *resty.Response) {
@@ -32,8 +34,8 @@ func TestUpdateHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms, nil)
+	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	h := NewHandler(ms)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -71,8 +73,8 @@ func TestListAllHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms, nil)
+	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
@@ -101,8 +103,8 @@ func TestGetMetricHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms, nil)
+	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
@@ -128,5 +130,6 @@ func TestGetMetricHandler(t *testing.T) {
 			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
 			assert.Equal(t, tt.expectedBody, resp.String(), "Response body didn't match expected")
 		})
+
 	}
 }

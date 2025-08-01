@@ -58,7 +58,7 @@ func TestGetServerConfig(t *testing.T) {
 			expectedConfig: ServerConfig{
 				Host:          "localhost:8080",
 				StoreInterval: 300,
-				FPath:         "./metrics_storage.json",
+				FPath:         "",
 				Restore:       false,
 				DatabaseDSN:   "",
 				LogLevel:      "debug",

@@ -53,7 +53,7 @@ func run() error {
 	ms.IntervalSaver(ctx, cfg.StoreInterval)
 
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(ms, )
+	h := handler.NewHandler(ms)
 	srv := server.NewServer(cfg, ms, h)
 
 	if err = srv.Serve(ctx); err != nil {
@@ -65,25 +65,25 @@ func run() error {
 
 // initDBConnection initializes the database connection based on the provided configuration.
 func initStorage(ctx context.Context, cfg config.ServerConfig) (*st.MemStorage, error) {
-	// Initialize the repository based on the configuration
+	// Initialize the storage based on the configuration
 	var (
-		repository st.Repository
-		err        error
+		stogare st.ExtStorage
+		err     error
 	)
 
 	if cfg.DatabaseDSN != "" {
-		repository, err = db.NewDB(ctx, cfg.DatabaseDSN)
+		stogare, err = db.NewDB(ctx, cfg.DatabaseDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connection: %w", err)
 		}
 	} else if cfg.FPath != "" {
-		repository = fsaver.NewFileSaver(cfg.FPath)
+		stogare = fsaver.NewFileSaver(cfg.FPath)
 	} else {
-		repository = st.NewStubRepository()
+		stogare = st.NewStubStorage()
 	}
 
 	// Create a new in-memory storage
-	ms := st.NewMemStorage(cfg.StoreInterval, repository)
+	ms := st.NewMemStorage(cfg.StoreInterval, stogare)
 
 	// If restore is enabled, load the metrics from the repository
 	if cfg.Restore {

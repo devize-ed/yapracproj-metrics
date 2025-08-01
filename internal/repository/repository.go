@@ -128,6 +128,14 @@ func (ms *MemStorage) LoadFromRepo(ctx context.Context) error {
 	return nil
 }
 
+// Ping delegates the ping request to the underlying external storage if it implements the Ping method.
+func (ms *MemStorage) Ping(ctx context.Context) error {
+	if p, ok := ms.ExtStorage.(interface{ Ping(context.Context) error }); ok {
+		return p.Ping(ctx)
+	}
+	return fmt.Errorf("external storage does not support Ping")
+}
+
 // IntervalSaver periodically saves the metrics to the file
 func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 	// If the interval is 0, it saves only when the server is closing.

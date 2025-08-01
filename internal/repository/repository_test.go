@@ -1,18 +1,25 @@
-// repository/storage_test.go
 package repository
 
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	fsaver "github.com/devize-ed/yapracproj-metrics.git/internal/repository/fsaver"
 )
 
+func tmpFilePath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "metrics.json")
+}
+
 func newTestStorage() *MemStorage {
-	return NewMemStorage(0, NewStubRepository())
+	return NewMemStorage(0, NewStubStorage())
 }
 
 func TestMemStorage_SetGauge(t *testing.T) {
@@ -37,7 +44,7 @@ func TestMemStorage_SetGauge(t *testing.T) {
 			want:       123,
 			ms: func() *MemStorage {
 				ms := newTestStorage()
-				ms.SetGauge("testMetric", 123.456)
+				ms.SetGauge(context.Background(), "testMetric", 123.456)
 				return ms
 			}(),
 		},
@@ -45,9 +52,9 @@ func TestMemStorage_SetGauge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.ms.SetGauge(tt.metricName, tt.value)
+			tt.ms.SetGauge(context.Background(), tt.metricName, tt.value)
 
-			got, ok := tt.ms.GetGauge(tt.metricName)
+			got, ok := tt.ms.GetGauge(context.Background(), tt.metricName)
 			assert.True(t, ok, "metric should exist")
 			assert.Equal(t, tt.want, got)
 		})
@@ -76,11 +83,11 @@ func TestMemStorage_GetGauge(t *testing.T) {
 	}
 
 	ms := newTestStorage()
-	ms.SetGauge("testMetric", 123.456)
+	ms.SetGauge(context.Background(), "testMetric", 123.456)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := ms.GetGauge(tt.metricName)
+			got, ok := ms.GetGauge(context.Background(), tt.metricName)
 
 			assert.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
@@ -120,9 +127,9 @@ func TestMemStorage_AddCounter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.ms.AddCounter(tt.metricName, tt.delta)
+			tt.ms.AddCounter(context.Background(), tt.metricName, tt.delta)
 
-			got, ok := tt.ms.GetCounter(tt.metricName)
+			got, ok := tt.ms.GetCounter(context.Background(), tt.metricName)
 			assert.True(t, ok, "metric should exist")
 			assert.Equal(t, tt.want, got)
 		})
@@ -155,7 +162,7 @@ func TestMemStorage_GetCounter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := ms.GetCounter(tt.metricName)
+			got, ok := ms.GetCounter(context.Background(), tt.metricName)
 
 			assert.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
@@ -168,14 +175,14 @@ func TestMemStorage_GetCounter(t *testing.T) {
 func TestStorage_IntervalSaver(t *testing.T) {
 	t.Run("periodic_save", func(t *testing.T) {
 		path := tmpFilePath(t)
-		st := NewMemStorage(1, NewFilePersister(path)) // without save
+		st := NewMemStorage(1, fsaver.NewFileSaver(path)) // without save
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		st.IntervalSaver(ctx, 1)
 
-		st.SetGauge("TestGauge", 123.11)
+		st.SetGauge(context.Background(), "TestGauge", 123.11)
 
 		time.Sleep(2 * time.Second) // wait for the ticker to tick
 
@@ -185,30 +192,30 @@ func TestStorage_IntervalSaver(t *testing.T) {
 		cancel()
 		time.Sleep(50 * time.Millisecond)
 
-		check := NewMemStorage(0, NewFilePersister(path))
-		require.NoError(t, check.Load())
-		val, ok := check.GetGauge("TestGauge")
+		check := NewMemStorage(0, fsaver.NewFileSaver(path))
+		require.NoError(t, check.LoadFromRepo(context.Background()))
+		val, ok := check.GetGauge(context.Background(), "TestGauge")
 		assert.True(t, ok)
 		assert.Equal(t, 123.11, val)
 	})
 
 	t.Run("sync_save", func(t *testing.T) {
 		path := tmpFilePath(t)
-		st := NewMemStorage(0, NewFilePersister(path)) //turn on sync save
+		st := NewMemStorage(0, fsaver.NewFileSaver(path)) //turn on sync save
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		st.IntervalSaver(ctx, 0) // sync mode
 
-		st.SetGauge("TestGauge", 123.4)
+		st.SetGauge(context.Background(), "TestGauge", 123.4)
 
 		_, err := os.Stat(path)
 		require.NoError(t, err, "file should be created for sync save")
 
-		load := NewMemStorage(0, NewFilePersister(path))
-		require.NoError(t, load.Load())
-		v, ok := load.GetGauge("TestGauge")
+		load := NewMemStorage(0, fsaver.NewFileSaver(path))
+		require.NoError(t, load.LoadFromRepo(context.Background()))
+		v, ok := load.GetGauge(context.Background(), "TestGauge")
 		assert.True(t, ok)
 		assert.Equal(t, 123.4, v)
 

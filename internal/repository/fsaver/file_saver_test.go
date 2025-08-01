@@ -2,11 +2,10 @@ package fsaver
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
+	repository "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,82 +52,30 @@ func TestStorage_SaveAndLoad(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := tmpFilePath(t)
-			pers := NewFilePersister(path)
-			src := NewMemStorage(0, pers)
+			pers := NewFileSaver(path)
+			src := repository.NewMemStorage(0, pers)
 			for _, g := range tt.gauge {
-				src.SetGauge(g.k, g.v)
+				src.SetGauge(context.Background(), g.k, g.v)
 			}
 			for _, c := range tt.counter {
-				src.AddCounter(c.k, c.v)
+				src.AddCounter(context.Background(), c.k, c.v)
 			}
 
-			require.NoError(t, src.Save(), "save failed")
+			require.NoError(t, src.SaveToRepo(context.Background()), "save failed")
 
-			dst := NewMemStorage(0, pers)
-			require.NoError(t, dst.Load(), "load failed")
+			dst := repository.NewMemStorage(0, pers)
+			require.NoError(t, dst.LoadFromRepo(context.Background()), "load failed")
 
 			for _, g := range tt.gauge {
-				val, ok := dst.GetGauge(g.k)
+				val, ok := dst.GetGauge(context.Background(), g.k)
 				assert.True(t, ok, "gauge %q missing", g.k)
 				assert.Equal(t, g.v, val)
 			}
 			for _, c := range tt.counter {
-				val, ok := dst.GetCounter(c.k)
+				val, ok := dst.GetCounter(context.Background(), c.k)
 				assert.True(t, ok, "counter %q missing", c.k)
 				assert.Equal(t, c.v, val)
 			}
 		})
 	}
-}
-
-func TestStorage_IntervalSaver(t *testing.T) {
-	t.Run("periodic_save", func(t *testing.T) {
-		path := tmpFilePath(t)
-		st := NewMemStorage(1, NewFilePersister(path)) // without save
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		st.IntervalSaver(ctx, 1)
-
-		st.SetGauge("TestGauge", 123.11)
-
-		time.Sleep(2 * time.Second) // wait for the ticker to tick
-
-		_, err := os.Stat(path)
-		assert.NoError(t, err, "file should be created after the interval")
-
-		cancel()
-		time.Sleep(50 * time.Millisecond)
-
-		check := NewMemStorage(0, NewFilePersister(path))
-		require.NoError(t, check.Load())
-		val, ok := check.GetGauge("TestGauge")
-		assert.True(t, ok)
-		assert.Equal(t, 123.11, val)
-	})
-
-	t.Run("sync_save", func(t *testing.T) {
-		path := tmpFilePath(t)
-		st := NewMemStorage(0, NewFilePersister(path)) //turn on sync save
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		st.IntervalSaver(ctx, 0) // sync mode
-
-		st.SetGauge("TestGauge", 123.4)
-
-		_, err := os.Stat(path)
-		require.NoError(t, err, "file should be created for sync save")
-
-		load := NewMemStorage(0, NewFilePersister(path))
-		require.NoError(t, load.Load())
-		v, ok := load.GetGauge("TestGauge")
-		assert.True(t, ok)
-		assert.Equal(t, 123.4, v)
-
-		cancel()
-		time.Sleep(1 * time.Second) // wait for the goroutine to finish
-	})
 }

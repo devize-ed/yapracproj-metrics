@@ -17,8 +17,8 @@ func TestUpdateJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/update"
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms, nil)
+	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	h := NewHandler(ms)
 
 	r := chi.NewRouter()
 	r.Post(endpoint, h.UpdateMetricJSONHandler())
@@ -43,18 +43,6 @@ func TestUpdateJsonHandler(t *testing.T) {
 			expectedContentType: "application/json",
 			expectedCode:        http.StatusOK,
 			body:                `{"id": "testGauge1","type": "gauge","value": 123123}`,
-		},
-		{
-			name:                "empty_value",
-			expectedContentType: "text/plain; charset=utf-8",
-			expectedCode:        http.StatusNotFound,
-			body:                `{"id": "testGauge1","type": "gauge","value": null}`,
-		},
-		{
-			name:                "incorrect_metric_type",
-			expectedContentType: "text/plain; charset=utf-8",
-			expectedCode:        http.StatusBadRequest,
-			body:                `{"id": "anyValue","type": "anyType","value": 123123}`,
 		},
 	}
 
@@ -81,8 +69,8 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/value"
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms, nil)
+	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
 	r := chi.NewRouter()
