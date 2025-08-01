@@ -40,7 +40,7 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to parse the DSN: %w", err)
 	}
 
-	if err = runMigrations(context, dsn); err != nil {
+	if err = runMigrations(dsn); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -70,14 +70,23 @@ func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[
 
 	// Prepare and execute the SQL statements to insert or update gauges
 	for id, val := range gauges {
-		if _, err := tx.Exec(ctx, "INSERT INTO gauges (id, value) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value", id, val); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO gauges (id, value) 
+				VALUES ($1, $2) 
+				ON CONFLICT (id) DO UPDATE 
+				SET value = EXCLUDED.value 
+			`, id, val); err != nil {
 			return fmt.Errorf("failed to insert gauge %s: %w", id, err)
 		}
 	}
 
 	// Prepare and execute the SQL statements to insert or update counters
 	for id, val := range counters {
-		if _, err := tx.Exec(ctx, "INSERT INTO counters (id, value) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value", id, val); err != nil {
+		if _, err := tx.Exec(ctx, `
+				INSERT INTO counters (id, delta) 
+				VALUES ($1, $2) 
+				ON CONFLICT (id) DO UPDATE 
+				SET delta = counters.delta + EXCLUDED.delta
+			`, id, val); err != nil {
 			return fmt.Errorf("failed to insert counter %s: %w", id, err)
 		}
 	}
@@ -90,10 +99,8 @@ func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[
 func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, error) {
 	logger.Log.Debug("Loading metrics from the database")
 	// create temporary maps to hold the loaded metrics
-	tmp := struct {
-		Gauge   map[string]float64 `json:"gauge"`
-		Counter map[string]int64   `json:"counter"`
-	}{}
+	Gauge := map[string]float64{}
+	Counter := map[string]int64{}
 
 	rows, err := db.pool.Query(ctx, "SELECT id, value FROM gauges")
 	if err != nil {
@@ -108,12 +115,12 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 		if err := rows.Scan(&id, &value); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan gauge row: %w", err)
 		}
-		tmp.Gauge[id] = value
+		Gauge[id] = value
 	}
 
 	rows, err = db.pool.Query(ctx, "SELECT id, value FROM counters")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query gauges: %w", err)
+		return nil, nil, fmt.Errorf("failed to query counters: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -122,13 +129,13 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 			delta int64
 		)
 		if err := rows.Scan(&id, &delta); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan gauge row: %w", err)
+			return nil, nil, fmt.Errorf("failed to scan counters row: %w", err)
 		}
-		tmp.Counter[id] = delta
+		Counter[id] = delta
 	}
 
-	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(tmp.Gauge), len(tmp.Counter))
-	return tmp.Gauge, tmp.Counter, nil
+	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(Gauge), len(Counter))
+	return Gauge, Counter, nil
 }
 
 func (db *DB) Ping(ctx context.Context) error {

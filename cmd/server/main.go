@@ -43,10 +43,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
+	if closer, ok := ms.ExtStorage.(interface { Close () error }); ok {
+		defer func () {
+			if err := closer.Close(); err != nil {	
+			}
+		}()
+	}
 
 	// create a context that listens for OS signals to shut down the server
-	ctx, stop := signal.NotifyContext(context.Background(),
-		os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// start the interval saver to periodically save metrics to the file

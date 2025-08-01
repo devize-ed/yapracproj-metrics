@@ -1,14 +1,13 @@
 package db
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func runMigrations(ctx context.Context, DSN string) error {
+func runMigrations(DSN string) error {
 	m, err := migrate.New(
 		"file://migrations",
 		DSN,
