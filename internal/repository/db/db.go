@@ -40,6 +40,10 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to parse the DSN: %w", err)
 	}
 
+	if err = runMigrations(context, dsn); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	// Set the connection pool configuration
 	poolCfg.ConnConfig.Tracer = &queryTracer{}
 	pool, err := pgxpool.NewWithConfig(context, poolCfg)
@@ -115,12 +119,12 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 	for rows.Next() {
 		var (
 			id    string
-			value int64
+			delta int64
 		)
-		if err := rows.Scan(&id, &value); err != nil {
+		if err := rows.Scan(&id, &delta); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan gauge row: %w", err)
 		}
-		tmp.Counter[id] = value
+		tmp.Counter[id] = delta
 	}
 
 	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(tmp.Gauge), len(tmp.Counter))
