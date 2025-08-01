@@ -43,9 +43,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
-	if closer, ok := ms.ExtStorage.(interface { Close () error }); ok {
-		defer func () {
-			if err := closer.Close(); err != nil {	
+	if closer, ok := ms.ExtStorage.(interface{ Close() error }); ok {
+		defer func() {
+			if err := closer.Close(); err != nil {
+				logger.Log.Errorf("failed to close storage: %v", err)
+				return
 			}
 		}()
 	}
@@ -68,27 +70,27 @@ func run() error {
 	return nil
 }
 
-// initDBConnection initializes the database connection based on the provided configuration.
+// initStorage initializes the storage based on the configuration.
 func initStorage(ctx context.Context, cfg config.ServerConfig) (*st.MemStorage, error) {
 	// Initialize the storage based on the configuration
 	var (
-		stogare st.ExtStorage
+		storage st.ExtStorage
 		err     error
 	)
 
 	if cfg.DatabaseDSN != "" {
-		stogare, err = db.NewDB(ctx, cfg.DatabaseDSN)
+		storage, err = db.NewDB(ctx, cfg.DatabaseDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connection: %w", err)
 		}
 	} else if cfg.FPath != "" {
-		stogare = fsaver.NewFileSaver(cfg.FPath)
+		storage = fsaver.NewFileSaver(cfg.FPath)
 	} else {
-		stogare = st.NewStubStorage()
+		storage = st.NewStubStorage()
 	}
 
 	// Create a new in-memory storage
-	ms := st.NewMemStorage(cfg.StoreInterval, stogare)
+	ms := st.NewMemStorage(cfg.StoreInterval, storage)
 
 	// If restore is enabled, load the metrics from the repository
 	if cfg.Restore {
