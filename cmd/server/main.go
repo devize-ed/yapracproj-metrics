@@ -35,8 +35,8 @@ func run() error {
 	}
 	defer logger.Log.Sync()
 
-	logger.Log.Infof("Server config: interval=%d fpath=%s restore=%v host=%s",
-		cfg.StoreInterval, cfg.FPath, cfg.Restore, cfg.Host)
+	logger.Log.Infof("Server config: interval=%d restore=%v host=%s",
+		cfg.StoreInterval, cfg.Restore, cfg.Host)
 
 	// create a new in-memory storage
 	ms, err := initStorage(context.Background(), cfg)
@@ -79,13 +79,16 @@ func initStorage(ctx context.Context, cfg config.ServerConfig) (*st.MemStorage, 
 	)
 
 	if cfg.DatabaseDSN != "" {
+		logger.Log.Info("Using database storage with DSN: %s", cfg.DatabaseDSN)
 		storage, err = db.NewDB(ctx, cfg.DatabaseDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize database connection: %w", err)
 		}
 	} else if cfg.FPath != "" {
+		logger.Log.Info("Using file storage: %s", cfg.FPath)
 		storage = fsaver.NewFileSaver(cfg.FPath)
 	} else {
+		logger.Log.Info("External storage is not specified, using in-memory storage")
 		storage = st.NewStubStorage()
 	}
 
@@ -94,6 +97,7 @@ func initStorage(ctx context.Context, cfg config.ServerConfig) (*st.MemStorage, 
 
 	// If restore is enabled, load the metrics from the repository
 	if cfg.Restore {
+		logger.Log.Info("Restoring metrics from repository")
 		if err := ms.LoadFromRepo(ctx); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("load metrics: %w", err)
 		}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"github.com/devize-ed/yapracproj-metrics.git/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,15 +18,20 @@ type DB struct {
 // NewDB provides the new data base connection with the provided configuration.
 func NewDB(ctx context.Context, dsn string) (*DB, error) {
 	logger.Log.Debugf("Connecting to database with DSN: %s", dsn)
+
+	// Run migrations before establishing the connection
+	if err := migrations.RunMigrations(dsn); err != nil {
+		return nil, fmt.Errorf("failed to run DB migrations: %w", err)
+	}
+
+	// Initialize a new connection pool with the provided DSN
 	pool, err := initPool(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize a connection pool: %w", err)
+		return nil, fmt.Errorf("failed to initialise a connection pool: %w", err)
 	}
 
 	logger.Log.Debug("Database connection established successfully")
-	return &DB{
-		pool: pool,
-	}, nil
+	return &DB{pool: pool}, nil
 }
 
 // initPool initializes a new connection pool.
@@ -38,10 +44,6 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse the DSN: %w", err)
-	}
-
-	if err = runMigrations(dsn); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	// Set the connection pool configuration

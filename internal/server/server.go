@@ -68,7 +68,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	// Save metrics before the exit.
 	logger.Log.Debug("Saving before exit ...")
-	if err := s.storage.SaveToRepo(ctx); err != nil {
+	if err := s.storage.SaveToRepo(shutCtx); err != nil {
 		return fmt.Errorf("failed to save on exit: %w", err)
 	}
 	return nil

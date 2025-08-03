@@ -2,13 +2,13 @@
 
 -- Create table for store gauge metrics
 CREATE TABLE IF NOT EXISTS gauges ( 
- id TEXT PRIMARY KEY,
+ id TEXT PRIMARY KEY NOT NULL,
  value DOUBLE PRECISION 
 );
 -- Create table for store counter metrics
 CREATE TABLE IF NOT EXISTS counters ( 
- id TEXT PRIMARY KEY,
- delta BIGINT,
+ id TEXT PRIMARY KEY NOT NULL,
+ delta BIGINT
 );
 
 

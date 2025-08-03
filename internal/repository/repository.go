@@ -143,7 +143,9 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 	if interval == 0 {
 		go func() {
 			<-ctx.Done()
-			if err := ms.SaveToRepo(ctx); err != nil {
+			saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := ms.SaveToRepo(saveCtx); err != nil {
 				logger.Log.Errorf("final save (sync mode) failed: %v", err)
 			}
 		}()
@@ -163,7 +165,9 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 					logger.Log.Errorf("periodic save failed: %v", err)
 				}
 			case <-ctx.Done(): // Save the metrics before exiting
-				if err := ms.SaveToRepo(ctx); err != nil {
+				saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := ms.SaveToRepo(saveCtx); err != nil {
 					logger.Log.Errorf("final save failed: %v", err)
 				}
 				return
