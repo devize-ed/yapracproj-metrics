@@ -117,7 +117,7 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 			logger.Log.Debugf("Received data is compressed,")
 			cr, err := NewCompressReader(r.Body)
 			if err != nil {
-				logger.Log.Debugf("rror decompressing request: ", err)
+				logger.Log.Debugf("error decompressing request: ", err)
 				http.Error(w, "error decompressing request", http.StatusInternalServerError)
 				return
 			}

@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 )
 
 // Repository interface defines the methods for saving and loading metrics.
 type ExtStorage interface {
 	Save(ctx context.Context, gauge map[string]float64, counter map[string]int64) error
 	Load(ctx context.Context) (map[string]float64, map[string]int64, error)
+	SaveBatch(ctx context.Context, metrics []models.Metrics) error
 }
 
 // MemStorage is the in-memory server storage for the metrics.
@@ -174,4 +176,12 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 			}
 		}
 	}()
+}
+
+// SaveBatch saves a batch of metrics to the storage.
+func (ms *MemStorage) SaveBatchToRepo(ctx context.Context, batch []models.Metrics) error {
+	if err := ms.ExtStorage.SaveBatch(ctx, batch); err != nil {
+		return fmt.Errorf("failed to save batch metrics: %w", err)
+	}
+	return nil
 }

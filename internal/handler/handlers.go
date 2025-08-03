@@ -19,6 +19,7 @@ type Repository interface {
 	AddCounter(ctx context.Context, name string, delta int64)
 	GetCounter(ctx context.Context, name string) (int64, bool)
 	ListAll(ctx context.Context) map[string]string
+	SaveBatchToRepo(ctx context.Context, batch []models.Metrics) error
 	Ping(ctx context.Context) error
 }
 

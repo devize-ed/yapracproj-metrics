@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 )
 
 // FileSaver is a struct that implements the Repository interface for saving metrics to a file.
@@ -49,6 +50,50 @@ func (f *FileSaver) Save(ctx context.Context, gauge map[string]float64, counter 
 	if err := os.WriteFile(f.fname, data, 0o644); err != nil {
 		return err
 	}
+	logger.Log.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
+	return nil
+}
+
+// Save writes the metrics to the specified file in JSON format.
+func (f *FileSaver) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
+	logger.Log.Debugf("saving metrics to %s", f.fname)
+	// Check if the file name is empty -> not saving (used in tests).
+	if f.fname == "" {
+		return nil
+	}
+
+	// Initialize maps to hold gauge and counter metrics.
+	var gauge = map[string]float64{}
+	var counter = map[string]int64{}
+
+	// Iterate over the metrics and populate the gauge and counter maps.
+	for _, m := range metrics {
+		switch m.MType {
+		case models.Gauge:
+			gauge[m.ID] = *m.Value
+		case models.Counter:
+			counter[m.ID] = *m.Delta
+		}
+	}
+
+	// Marshal the metrics to JSON format.
+	data, err := json.MarshalIndent(struct {
+		Gauge   map[string]float64 `json:"gauge"`
+		Counter map[string]int64   `json:"counter"`
+	}{gauge, counter}, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	// Check if the directory exists, create it if not.
+	if err := os.MkdirAll(filepath.Dir(f.fname), 0o755); err != nil {
+		return err
+	}
+	// Write the data to the file.
+	if err := os.WriteFile(f.fname, data, 0o644); err != nil {
+		return err
+	}
+	// Marshal the metrics to JSON format.
 	logger.Log.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
 	return nil
 }

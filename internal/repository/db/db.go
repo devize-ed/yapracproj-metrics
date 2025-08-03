@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/migrations"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -19,7 +21,7 @@ func NewDB(ctx context.Context, dsn string) (*DB, error) {
 	logger.Log.Debugf("Connecting to database with DSN: %s", dsn)
 
 	// Run migrations before establishing the connection
-	if err := migrations.RunMigrations(dsn); err != nil {
+	if err := migrations.RunMigrations(dsn, true); err != nil {
 		return nil, fmt.Errorf("failed to run DB migrations: %w", err)
 	}
 
@@ -35,10 +37,6 @@ func NewDB(ctx context.Context, dsn string) (*DB, error) {
 
 // initPool initializes a new connection pool.
 func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
-	// // Create a context with a timeout to avoid hanging indefinitely
-	// context, cancel := context.WithTimeout(ctx, 15*time.Second)
-	// defer cancel()
-
 	// Parse the DSN and create a new connection pool with tracing enabled
 	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -94,6 +92,51 @@ func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[
 
 	// Commit the transaction
 	return tx.Commit(ctx)
+}
+
+// SaveBatch saves a batch of metrics to the database.
+func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
+	// Begin a transaction
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Prepare a batch of SQL statements to insert or update metrics
+	batch := &pgx.Batch{}
+	for _, m := range metrics {
+		switch m.MType {
+		case models.Gauge:
+			batch.Queue(`
+                INSERT INTO gauges(id,value)
+                VALUES ($1,$2)
+                ON CONFLICT(id) DO UPDATE
+                SET value = EXCLUDED.value
+            `, m.ID, m.Value)
+		case models.Counter:
+			batch.Queue(`
+                INSERT INTO counters(id,delta)
+                VALUES ($1,$2)
+                ON CONFLICT(id) DO UPDATE
+                SET delta = counters.delta + EXCLUDED.delta
+            `, m.ID, m.Delta)
+		}
+	}
+
+	// Send the batch to the database
+	br := tx.SendBatch(ctx, batch)
+
+	// Check for errors in the batch execution
+	if err := br.Close(); err != nil {
+		return fmt.Errorf("batch close: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }
 
 // Load reads the metrics from the database.

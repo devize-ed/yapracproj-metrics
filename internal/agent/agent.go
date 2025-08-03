@@ -51,17 +51,38 @@ func (a *Agent) Run() error {
 			// Check whether “test‑get” mode is enabled.
 			if !a.config.EnableTestGet {
 				// Iterate over the storage and send metrics to the server.
-				for name, val := range a.storage.Counters {
-					if err := SendMetric(a, name, val); err != nil {
-						logger.Log.Error("error sending ", name, ": ", err)
-					}
-				}
+				// for name, val := range a.storage.Counters {
+				// 	if err := SendMetric(a, name, val); err != nil {
+				// 		logger.Log.Error("error sending ", name, ": ", err)
+				// 	}
+				// }
+				// for name, val := range a.storage.Gauges {
+				// 	if err := SendMetric(a, name, val); err != nil {
+				// 		logger.Log.Error("error sending ", name, ": ", err)
+				// 	}
+				// }
+				var metrics = []models.Metrics{}
 				for name, val := range a.storage.Gauges {
-					if err := SendMetric(a, name, val); err != nil {
-						logger.Log.Error("error sending ", name, ": ", err)
-					}
+					floatVal := float64(val)
+					metrics = append(metrics, models.Metrics{
+						ID:    name,
+						MType: models.Gauge,
+						Value: &floatVal,
+					})
+				}
+				for name, val := range a.storage.Counters {
+					intVal := int64(val)
+					metrics = append(metrics, models.Metrics{
+						ID:    name,
+						MType: models.Counter,
+						Delta: &intVal,
+					})
+				}
+				if err := SendMetricsBatch(a, metrics); err != nil {
+					logger.Log.Error("error sending batch metrics: ", err)
 				}
 			} else {
+				logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
 				// “Test‑get” mode: request metrics from the server.
 				for name, val := range a.storage.Counters {
 					if err := GetMetric(a, name, val); err != nil {
@@ -106,6 +127,47 @@ func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
 	return nil
 }
 
+// SendMetric sends a single metric to the server.
+func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
+	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Host)
+
+	req := a.client.R().
+		SetHeader("Content-Type", "application/json")
+
+	switch a.config.EnableGzip {
+	case true:
+		// Marshal the body to JSON.
+		jsonBody, err := json.Marshal(metrics)
+		if err != nil {
+			return fmt.Errorf("error marshalling request body: %v", err)
+		}
+
+		// Compress the JSON body.
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		_, _ = zw.Write(jsonBody)
+		_ = zw.Close()
+
+		req.SetHeader("Content-Encoding", "gzip").
+			SetHeader("Accept-Encoding", "gzip").
+			SetBody(buf.Bytes()) // Use the compressed request body.
+	case false:
+		req.SetBody(metrics) // Use the uncompressed request body.
+	}
+
+	logger.Log.Debugf("Request body: %+v", metrics)
+	logger.Log.Debug("Request header: ", req.Header)
+
+	resp, err := req.Post(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to POST request: %v", err)
+	}
+
+	logger.Log.Debug("Response status-code: ", resp.StatusCode())
+	logger.Log.Debug("Response header: ", resp.Header())
+	return nil
+}
+
 // GetMetric requests a metric from the server for testing purposes.
 func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
 	endpoint := fmt.Sprintf("http://%s/value/", a.config.Host)
@@ -130,7 +192,7 @@ func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
 	return nil
 }
 
-func (a Agent) Request(metric string, endpoint string, body models.Metrics) error {
+func (a Agent) Request(name string, endpoint string, body models.Metrics) error {
 	req := a.client.R().
 		SetHeader("Content-Type", "application/json")
 
@@ -155,8 +217,8 @@ func (a Agent) Request(metric string, endpoint string, body models.Metrics) erro
 		return fmt.Errorf("failed to POST request: %v", err)
 	}
 
-	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", metric)
-	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", metric)
+	logger.Log.Debug("Response status-code: ", resp.StatusCode(), " Metric: ", name)
+	logger.Log.Debug("Response header: ", resp.Header(), " Metric: ", name)
 	return nil
 }
 

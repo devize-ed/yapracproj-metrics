@@ -15,6 +15,7 @@ func (h *Handler) NewRouter() http.Handler {
 	r.Use(mw.MiddlewareLogging, middleware.StripSlashes, mw.MiddlewareGzip)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
 	r.Post("/update", h.UpdateMetricJSONHandler())
+	r.Post("/updates", h.UpdateBatchHandler())
 	r.Post("/value", h.GetMetricJSONHandler())
 	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())
 	r.Get("/", h.ListMetricsHandler())

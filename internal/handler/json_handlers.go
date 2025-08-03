@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
@@ -14,9 +12,6 @@ import (
 // UpdateMetricJSONHandler handles the update of a metric based on JSON request body.
 func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		context, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-
 		w.Header().Set("Content-Type", "application/json")
 
 		// Decode request body into model struct.
@@ -43,7 +38,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				return
 			}
 
-			h.storage.AddCounter(context, metricName, metricValue)
+			h.storage.AddCounter(r.Context(), metricName, metricValue)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
@@ -54,7 +49,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty gauge value", http.StatusNotFound)
 				return
 			}
-			h.storage.SetGauge(context, metricName, metricValue)
+			h.storage.SetGauge(r.Context(), metricName, metricValue)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
 		default:
@@ -135,5 +130,29 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 		if _, err := w.Write(resp); err != nil {
 			logger.Log.Debug("Failed to write response body:", err)
 		}
+	}
+}
+
+// UpdateBatchHandler handles the batch update of metrics based on JSON request body.
+func (h *Handler) UpdateBatchHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var metrics []models.Metrics
+		if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
+			logger.Log.Debug("Cannot decode request JSON body", zap.Error(err))
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.storage.SaveBatchToRepo(r.Context(), metrics); err != nil {
+			logger.Log.Error("failed to save batch", zap.Error(err))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Log.Debug("Saved batch of metrics", zap.Any("batch", metrics))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}
 }
