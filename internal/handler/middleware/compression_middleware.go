@@ -34,36 +34,22 @@ func (c *compressWriter) Header() http.Header {
 
 // WriteHeader writes the HTTP status code and sets the Content-Encoding header if compression is enabled.
 func (c *compressWriter) WriteHeader(code int) {
-	// check Content‑Type and status code
-	header := c.Header()
-	if code < http.StatusMultipleChoices && !c.compress {
-		contentType := header.Get("Content-Type")
-		if strings.Contains(contentType, "application/json") ||
-			strings.Contains(contentType, "text/html") {
-			c.compress = true
-		}
-	}
-
-	// compress if flag == true and set the header
 	if c.compress {
-		header.Set("Content-Encoding", "gzip")
-		header.Del("Content-Length")
+		c.Header().Set("Content-Encoding", "gzip")
+		c.Header().Del("Content-Length")
 		if c.zw == nil {
 			c.zw = gzip.NewWriter(c.ResponseWriter)
 		}
 	}
 	c.ResponseWriter.WriteHeader(code)
+	if c.compress && c.zw != nil {
+		c.zw.Close()
+	}
 }
-
 func (c *compressWriter) Write(b []byte) (int, error) {
 	if !c.compress {
 		return c.ResponseWriter.Write(b)
 	}
-
-	if c.zw == nil {
-		c.WriteHeader(http.StatusOK)
-	}
-
 	return c.zw.Write(b)
 }
 
