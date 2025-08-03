@@ -58,19 +58,19 @@ func (f *FileSaver) Load(ctx context.Context) (map[string]float64, map[string]in
 	logger.Log.Debugf("loading metrics from %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {
-		return nil, nil, nil
+		return map[string]float64{}, map[string]int64{}, nil
 	}
 
 	// Check if the file exists.
 	data, err := os.ReadFile(f.fname)
 	if err != nil {
-		return nil, nil, os.ErrNotExist
+		return map[string]float64{}, map[string]int64{}, os.ErrNotExist
 	}
 
 	// Check if the data is empty.
 	if len(data) == 0 {
 		logger.Log.Warn("storage empty")
-		return nil, nil, nil
+		return map[string]float64{}, map[string]int64{}, nil
 	}
 
 	// Unmarshal the data to a temporary struct.
@@ -84,7 +84,7 @@ func (f *FileSaver) Load(ctx context.Context) (map[string]float64, map[string]in
 			logger.Log.Warnf("data storage error: %v", err)
 			return nil, nil, nil
 		}
-		return nil, nil, fmt.Errorf("error unmarshal metrics: %w", err)
+		return map[string]float64{}, map[string]int64{}, fmt.Errorf("error unmarshal metrics: %w", err)
 	}
 
 	logger.Log.Debugf("metrics restored from %s", f.fname)

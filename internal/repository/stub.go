@@ -17,5 +17,5 @@ func (s *StubStorage) Save(ctx context.Context, gauge map[string]float64, counte
 
 // Load returns empty maps for the stub repository.
 func (s *StubStorage) Load(ctx context.Context) (map[string]float64, map[string]int64, error) {
-	return nil, nil, nil // No-op for stub
+	return map[string]float64{}, map[string]int64{}, nil // No-op for stub
 }

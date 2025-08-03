@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
@@ -12,6 +14,9 @@ import (
 // UpdateMetricJSONHandler handles the update of a metric based on JSON request body.
 func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		context, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
 		w.Header().Set("Content-Type", "application/json")
 
 		// Decode request body into model struct.
@@ -24,7 +29,6 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 			return
 		}
 		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
-
 		// Get parameters.
 		metricName := body.ID
 		metricType := body.MType
@@ -38,7 +42,8 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty counter value", http.StatusNotFound)
 				return
 			}
-			h.storage.AddCounter(r.Context(), metricName, metricValue)
+
+			h.storage.AddCounter(context, metricName, metricValue)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
@@ -49,7 +54,7 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty gauge value", http.StatusNotFound)
 				return
 			}
-			h.storage.SetGauge(r.Context(), metricName, metricValue)
+			h.storage.SetGauge(context, metricName, metricValue)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
 		default:
@@ -58,7 +63,6 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
-
 		// Write response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -119,12 +123,17 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 		}
 
 		// Write response.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(body); err != nil {
+		resp, err := json.Marshal(body)
+		if err != nil {
 			logger.Log.Debug("Cannot encode response JSON:", err)
 			http.Error(w, "Cannot encode response JSON", http.StatusInternalServerError)
 			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(resp); err != nil {
+			logger.Log.Debug("Failed to write response body:", err)
 		}
 	}
 }
