@@ -22,10 +22,8 @@ func newCompressWriter(w http.ResponseWriter, compress bool) *compressWriter {
 		return &compressWriter{ResponseWriter: w}
 	}
 
-	zw := gzip.NewWriter(w)
 	return &compressWriter{
 		ResponseWriter: w,
-		zw:             zw,
 		compress:       true,
 	}
 }
@@ -47,10 +45,12 @@ func (c *compressWriter) WriteHeader(code int) {
 	}
 
 	// compress if flag == true and set the header
-	if c.compress && c.zw == nil {
+	if c.compress {
 		header.Set("Content-Encoding", "gzip")
 		header.Del("Content-Length")
-		c.zw = gzip.NewWriter(c.ResponseWriter)
+		if c.zw == nil {
+			c.zw = gzip.NewWriter(c.ResponseWriter)
+		}
 	}
 	c.ResponseWriter.WriteHeader(code)
 }
@@ -61,7 +61,7 @@ func (c *compressWriter) Write(b []byte) (int, error) {
 	}
 
 	if c.zw == nil {
-		c.zw = gzip.NewWriter(c.ResponseWriter)
+		c.WriteHeader(http.StatusOK)
 	}
 
 	return c.zw.Write(b)
@@ -134,7 +134,6 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 		logger.Log.Debugf("Accept-Encoding: %s, gzip: %t", acceptEncoding, supportsGzip)
 		if supportsGzip {
 			cw := newCompressWriter(w, true)
-			w.Header().Set("Content-Encoding", "gzip")
 			defer cw.Close()
 			ow = cw
 		}
