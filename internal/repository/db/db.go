@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/devize-ed/yapracproj-metrics.git/migrations"
@@ -36,9 +35,9 @@ func NewDB(ctx context.Context, dsn string) (*DB, error) {
 
 // initPool initializes a new connection pool.
 func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
-	// Create a context with a timeout to avoid hanging indefinitely
-	context, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	// // Create a context with a timeout to avoid hanging indefinitely
+	// context, cancel := context.WithTimeout(ctx, 15*time.Second)
+	// defer cancel()
 
 	// Parse the DSN and create a new connection pool with tracing enabled
 	poolCfg, err := pgxpool.ParseConfig(dsn)
@@ -48,13 +47,13 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 	// Set the connection pool configuration
 	poolCfg.ConnConfig.Tracer = &queryTracer{}
-	pool, err := pgxpool.NewWithConfig(context, poolCfg)
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize a connection pool: %w", err)
 	}
 
 	// Ping the database to ensure the connection is established
-	if err := pool.Ping(context); err != nil {
+	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping the DB: %w", err)
 	}
 	return pool, nil
@@ -120,7 +119,7 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 		Gauge[id] = value
 	}
 
-	rows, err = db.pool.Query(ctx, "SELECT id, value FROM counters")
+	rows, err = db.pool.Query(ctx, "SELECT id, delta FROM counters")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query counters: %w", err)
 	}
