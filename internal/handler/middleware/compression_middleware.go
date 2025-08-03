@@ -37,25 +37,26 @@ func (c *compressWriter) WriteHeader(code int) {
 	if c.compress {
 		c.Header().Set("Content-Encoding", "gzip")
 		c.Header().Del("Content-Length")
-		if c.zw == nil {
-			c.zw = gzip.NewWriter(c.ResponseWriter)
-		}
+		// писатель пригодится позже — создадим при первом Write
 	}
 	c.ResponseWriter.WriteHeader(code)
-	if c.compress && c.zw != nil {
-		c.zw.Close()
-	}
 }
+
 func (c *compressWriter) Write(b []byte) (int, error) {
 	if !c.compress {
 		return c.ResponseWriter.Write(b)
+	}
+	if c.zw == nil {
+		c.zw = gzip.NewWriter(c.ResponseWriter)
 	}
 	return c.zw.Write(b)
 }
 
 func (c *compressWriter) Close() error {
 	if c.zw != nil {
-		return c.zw.Close()
+		if err := c.zw.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

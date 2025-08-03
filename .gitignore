@@ -26,3 +26,5 @@ vendor/
 
 # JSON dupms of the storage
 *.json
+
+metricstest
