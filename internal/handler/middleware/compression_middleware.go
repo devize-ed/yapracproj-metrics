@@ -22,8 +22,10 @@ func newCompressWriter(w http.ResponseWriter, compress bool) *compressWriter {
 		return &compressWriter{ResponseWriter: w}
 	}
 
+	zw := gzip.NewWriter(w)
 	return &compressWriter{
 		ResponseWriter: w,
+		zw:             zw,
 		compress:       true,
 	}
 }
@@ -34,10 +36,21 @@ func (c *compressWriter) Header() http.Header {
 
 // WriteHeader writes the HTTP status code and sets the Content-Encoding header if compression is enabled.
 func (c *compressWriter) WriteHeader(code int) {
-	if c.compress {
-		c.Header().Set("Content-Encoding", "gzip")
-		c.Header().Del("Content-Length")
-		// писатель пригодится позже — создадим при первом Write
+	// check Content‑Type and status code
+	header := c.Header()
+	if code < http.StatusMultipleChoices && !c.compress {
+		contentType := header.Get("Content-Type")
+		if strings.Contains(contentType, "application/json") ||
+			strings.Contains(contentType, "text/html") {
+			c.compress = true
+		}
+	}
+
+	// compress if flag == true and set the header
+	if c.compress && c.zw == nil {
+		header.Set("Content-Encoding", "gzip")
+		header.Del("Content-Length")
+		c.zw = gzip.NewWriter(c.ResponseWriter)
 	}
 	c.ResponseWriter.WriteHeader(code)
 }
@@ -46,17 +59,17 @@ func (c *compressWriter) Write(b []byte) (int, error) {
 	if !c.compress {
 		return c.ResponseWriter.Write(b)
 	}
+
 	if c.zw == nil {
 		c.zw = gzip.NewWriter(c.ResponseWriter)
 	}
+
 	return c.zw.Write(b)
 }
 
 func (c *compressWriter) Close() error {
 	if c.zw != nil {
-		if err := c.zw.Close(); err != nil {
-			return err
-		}
+		return c.zw.Close()
 	}
 	return nil
 }
@@ -121,6 +134,7 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 		logger.Log.Debugf("Accept-Encoding: %s, gzip: %t", acceptEncoding, supportsGzip)
 		if supportsGzip {
 			cw := newCompressWriter(w, true)
+			w.Header().Set("Content-Encoding", "gzip")
 			defer cw.Close()
 			ow = cw
 		}

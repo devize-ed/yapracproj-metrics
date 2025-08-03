@@ -23,7 +23,10 @@ func Initialize(level string) error {
 	cfg.EncoderConfig.MessageKey = "msg"
 	cfg.EncoderConfig.LevelKey = "level"
 
-	zl, err := cfg.Build()
+	zl, err := cfg.Build(
+		zap.AddStacktrace(zapcore.FatalLevel),
+		zap.AddCaller(),
+	)
 	if err != nil {
 		return err
 	}
