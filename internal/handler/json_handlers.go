@@ -120,10 +120,11 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 
 		// Write response.
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(body); err != nil {
 			logger.Log.Debug("Cannot encode response JSON:", err)
+			http.Error(w, "Cannot encode response JSON", http.StatusInternalServerError)
 			return
 		}
+		w.WriteHeader(http.StatusOK)
 	}
 }
