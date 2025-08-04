@@ -2,12 +2,16 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/migrations"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -91,7 +95,10 @@ func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[
 	}
 
 	// Commit the transaction
-	return tx.Commit(ctx)
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return fmt.Errorf("commit error: %w", err)
+	}
+	return nil
 }
 
 // SaveBatch saves a batch of metrics to the database.
@@ -133,20 +140,26 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	}
 
 	// Commit the transaction
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit: %w", err)
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return fmt.Errorf("commit error: %w", err)
 	}
 	return nil
 }
 
 // Load reads the metrics from the database.
 func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, error) {
+	tx, err := db.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return map[string]float64{}, map[string]int64{}, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	logger.Log.Debug("Loading metrics from the database")
 	// create temporary maps to hold the loaded metrics
-	Gauge := map[string]float64{}
-	Counter := map[string]int64{}
+	gauge := map[string]float64{}
+	counter := map[string]int64{}
 
-	rows, err := db.pool.Query(ctx, "SELECT id, value FROM gauges")
+	rows, err := tx.Query(ctx, "SELECT id, value FROM gauges")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query gauges: %w", err)
 	}
@@ -159,10 +172,10 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 		if err := rows.Scan(&id, &value); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan gauge row: %w", err)
 		}
-		Gauge[id] = value
+		gauge[id] = value
 	}
 
-	rows, err = db.pool.Query(ctx, "SELECT id, delta FROM counters")
+	rows, err = tx.Query(ctx, "SELECT id, delta FROM counters")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query counters: %w", err)
 	}
@@ -175,11 +188,15 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 		if err := rows.Scan(&id, &delta); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan counters row: %w", err)
 		}
-		Counter[id] = delta
+		counter[id] = delta
 	}
 
-	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(Gauge), len(Counter))
-	return Gauge, Counter, nil
+	// Commit the transaction
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return map[string]float64{}, map[string]int64{}, fmt.Errorf("commit error: %w", err)
+	}
+	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(gauge), len(counter))
+	return gauge, counter, nil
 }
 
 func (db *DB) Ping(ctx context.Context) error {
@@ -195,4 +212,43 @@ func (db *DB) Ping(ctx context.Context) error {
 func (db *DB) Close() error {
 	db.pool.Close()
 	return nil
+}
+
+func commitWithRetries(ctx context.Context, tx pgx.Tx) error {
+	// Define backoff durations for retries
+	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
+
+	for i := 0; ; i++ {
+		// attempt to commit the transaction
+		if err := tx.Commit(ctx); err != nil {
+			// if the error is not retriable, return it
+			if !isErrorRetriable(err) {
+				return fmt.Errorf("commit (attempt %d): %w", i+1, err)
+			}
+			// if we have exhausted all retries, return the error
+			if i == len(backoffs) {
+				return fmt.Errorf("commit (attempt %d): %w", i+1, err)
+			}
+			// if the error is retriable, wait for the backoff duration and retry
+			select {
+			case <-time.After(backoffs[i]):
+				continue // retry the commit
+			case <-ctx.Done():
+				return ctx.Err() // return context error if the context is done
+			}
+		}
+		// if the commit was successful, return nil
+		return nil
+	}
+}
+
+// isErrorRetriable checks for specific PostgreSQL error codes that indicate retriable errors (connection issues).
+func isErrorRetriable(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == pgerrcode.SerializationFailure ||
+		pgErr.Code == pgerrcode.LockNotAvailable ||
+		pgErr.Code == pgerrcode.QueryCanceled) {
+		return true
+	}
+	return false
 }

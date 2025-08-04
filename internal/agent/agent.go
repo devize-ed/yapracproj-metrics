@@ -23,7 +23,7 @@ type Agent struct {
 // NewAgent returns a new Agent that uses the given HTTP client and configuration.
 func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 	return &Agent{
-		client:  client,
+		client:  clientWithRetries(client),
 		storage: NewAgentStorage(),
 		config:  config,
 	}
@@ -236,4 +236,18 @@ func Compress(data models.Metrics) ([]byte, error) {
 	_ = zw.Close()
 
 	return buf.Bytes(), nil
+}
+
+func clientWithRetries(client *resty.Client) *resty.Client {
+	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
+
+	client.SetRetryCount(len(backoffs)).
+		SetRetryAfter(func(c *resty.Client, r *resty.Response) (time.Duration, error) {
+			n := r.Request.Attempt - 1
+			if n < len(backoffs) {
+				return backoffs[n], nil
+			}
+			return 0, fmt.Errorf("number of retries exceeded: %d", r.Request.Attempt)
+		})
+	return client
 }
