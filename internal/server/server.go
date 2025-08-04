@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
@@ -38,14 +39,22 @@ func NewServer(cfg config.ServerConfig, storage Repository, h *handler.Handler) 
 }
 
 // Shutdown passes through to the embedded http.Server.
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *Server) shutdown(ctx context.Context) error {
 	return s.Server.Shutdown(ctx)
 }
 
 // Serve starts the HTTP server, blocks until ctx is cancelled, provide shutdown and save metrics.
 func (s *Server) Serve(ctx context.Context) error {
+	// initialize the wait group to ensure graceful shutdown.
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	// Start the HTTP server in a goroutine.
 	go func() {
+		// Ensure the goroutine signals completion when done.
+		defer wg.Done()
+
+		// Setart the server and listen for incoming requests.
 		logger.Log.Infof("HTTP server listening on %s", s.cfg.Host)
 		if err := s.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
@@ -62,9 +71,12 @@ func (s *Server) Serve(ctx context.Context) error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := s.Shutdown(shutCtx); err != nil {
+	if err := s.shutdown(shutCtx); err != nil {
 		return fmt.Errorf("error shutting down the server: %w", err)
 	}
+
+	// Wait for the server to finish processing requests.
+	wg.Wait()
 
 	// Save metrics before the exit.
 	logger.Log.Debug("Saving before exit ...")

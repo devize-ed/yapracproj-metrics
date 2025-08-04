@@ -166,12 +166,8 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 				if err := ms.SaveToRepo(ctx); err != nil {
 					logger.Log.Errorf("periodic save failed: %v", err)
 				}
-			case <-ctx.Done(): // Save the metrics before exiting
-				saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := ms.SaveToRepo(saveCtx); err != nil {
-					logger.Log.Errorf("final save failed: %v", err)
-				}
+			case <-ctx.Done(): // Exit the loop if context is done
+				logger.Log.Debug("Interval saver stopped")
 				return
 			}
 		}
@@ -180,6 +176,27 @@ func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
 
 // SaveBatch saves a batch of metrics to the storage.
 func (ms *MemStorage) SaveBatchToRepo(ctx context.Context, batch []models.Metrics) error {
+	// Save metrics to the in-memory storage for backward compatibility.
+	for _, m := range batch {
+		switch m.MType {
+		case models.Gauge:
+			if m.Value == nil {
+				return fmt.Errorf("gauge metric %s has no value", m.ID)
+			} else {
+				ms.SetGauge(ctx, m.ID, *m.Value)
+			}
+		case models.Counter:
+			if m.Delta == nil {
+				return fmt.Errorf("counter metric %s has no delta", m.ID)
+			} else {
+				ms.AddCounter(ctx, m.ID, *m.Delta)
+			}
+		default:
+			return fmt.Errorf("unknown metric type %s for metric %s", m.MType, m.ID)
+		}
+	}
+
+	// Save the batch of metrics to the external storage.
 	if err := ms.ExtStorage.SaveBatch(ctx, batch); err != nil {
 		return fmt.Errorf("failed to save batch metrics: %w", err)
 	}
