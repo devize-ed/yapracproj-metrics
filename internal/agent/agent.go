@@ -244,10 +244,12 @@ func clientWithRetries(client *resty.Client) *resty.Client {
 	client.SetRetryCount(len(backoffs)).
 		SetRetryAfter(func(c *resty.Client, r *resty.Response) (time.Duration, error) {
 			n := r.Request.Attempt - 1
-			if n < len(backoffs) {
-				return backoffs[n], nil
+			if n >= len(backoffs) {
+				n = len(backoffs) - 1
 			}
-			return 0, fmt.Errorf("number of retries exceeded: %d", r.Request.Attempt)
+			delay := backoffs[n]
+			logger.Log.Debugf("retry attempt %d, waiting %s", r.Request.Attempt, delay)
+			return delay, nil
 		})
 	return client
 }

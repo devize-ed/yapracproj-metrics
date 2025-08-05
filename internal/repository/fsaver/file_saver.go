@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
@@ -47,7 +48,7 @@ func (f *FileSaver) Save(ctx context.Context, gauge map[string]float64, counter 
 		return err
 	}
 	// Write the data to the file.
-	if err := os.WriteFile(f.fname, data, 0o644); err != nil {
+	if err := writeFileWithRetries(ctx, f.fname, data); err != nil {
 		return err
 	}
 	logger.Log.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
@@ -90,7 +91,7 @@ func (f *FileSaver) SaveBatch(ctx context.Context, metrics []models.Metrics) err
 		return err
 	}
 	// Write the data to the file.
-	if err := os.WriteFile(f.fname, data, 0o644); err != nil {
+	if err := writeFileWithRetries(ctx, f.fname, data); err != nil {
 		return err
 	}
 	// Marshal the metrics to JSON format.
@@ -134,4 +135,25 @@ func (f *FileSaver) Load(ctx context.Context) (map[string]float64, map[string]in
 
 	logger.Log.Debugf("metrics restored from %s", f.fname)
 	return tmp.Gauge, tmp.Counter, nil
+}
+
+func writeFileWithRetries(ctx context.Context, fname string, data []byte) error {
+	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
+
+	for attempt := 1; attempt <= len(backoffs)+1; attempt++ {
+		if err := os.WriteFile(fname, data, 0o644); err != nil {
+			if attempt == len(backoffs)+1 {
+				return err
+			}
+			logger.Log.Debugf("write file failed, attempt %d: %v", attempt, err)
+			select {
+			case <-time.After(backoffs[attempt-1]):
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+	return nil
 }

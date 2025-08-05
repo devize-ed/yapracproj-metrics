@@ -35,7 +35,11 @@ func run() error {
 	client := resty.New() // Initialize HTTP client.
 
 	a := agent.NewAgent(client, cfg) // Create a new agent instance.
-	a.Run()                          // Start the agent to collect and report metrics.
+
+	// Start the agent to collect and report metrics.
+	if err := a.Run(); err != nil {
+		return fmt.Errorf("failed to run agent: %w", err)
+	}
 
 	return nil
 }

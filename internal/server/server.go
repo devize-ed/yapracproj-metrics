@@ -40,7 +40,7 @@ func NewServer(cfg config.ServerConfig, storage Repository, h *handler.Handler) 
 
 // Shutdown passes through to the embedded http.Server.
 func (s *Server) shutdown(ctx context.Context) error {
-	return s.Server.Shutdown(ctx)
+	return s.Shutdown(ctx)
 }
 
 // Serve starts the HTTP server, blocks until ctx is cancelled, provide shutdown and save metrics.

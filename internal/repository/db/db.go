@@ -218,28 +218,26 @@ func commitWithRetries(ctx context.Context, tx pgx.Tx) error {
 	// Define backoff durations for retries
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
 
-	for i := 0; ; i++ {
+	for attempt := 1; attempt <= len(backoffs)+1; attempt++ {
 		// attempt to commit the transaction
 		if err := tx.Commit(ctx); err != nil {
-			// if the error is not retriable, return it
-			if !isErrorRetriable(err) {
-				return fmt.Errorf("commit (attempt %d): %w", i+1, err)
+			// if the error is not retriable or we have exhausted all retries, return the error
+			if !isErrorRetriable(err) || attempt == len(backoffs)+1 {
+				return fmt.Errorf("commit (attempt %d): %w", attempt, err)
 			}
-			// if we have exhausted all retries, return the error
-			if i == len(backoffs) {
-				return fmt.Errorf("commit (attempt %d): %w", i+1, err)
-			}
+			logger.Log.Debugf("commit failed, attempt %d: %v", attempt, err)
 			// if the error is retriable, wait for the backoff duration and retry
 			select {
-			case <-time.After(backoffs[i]):
+			case <-time.After(backoffs[attempt-1]):
 				continue // retry the commit
 			case <-ctx.Done():
 				return ctx.Err() // return context error if the context is done
 			}
 		}
-		// if the commit was successful, return nil
 		return nil
 	}
+	// if the commit was successful, return nil
+	return nil
 }
 
 // isErrorRetriable checks for specific PostgreSQL error codes that indicate retriable errors (connection issues).
