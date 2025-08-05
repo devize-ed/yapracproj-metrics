@@ -91,8 +91,7 @@ func TestGetServerConfig(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
 
 			for key, val := range tc.envVars {
-				os.Setenv(key, val)
-				defer os.Unsetenv(key)
+				t.Setenv(key, val)
 			}
 
 			os.Args = append([]string{"cmd"}, tc.args...)
@@ -193,8 +192,7 @@ func TestGetAgentConfig(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
 
 			for key, val := range tc.envVars {
-				os.Setenv(key, val)
-				defer os.Unsetenv(key)
+				t.Setenv(key, val)
 			}
 
 			os.Args = append([]string{"cmd"}, tc.args...)

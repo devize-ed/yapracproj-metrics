@@ -127,7 +127,9 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 
 		// Write response
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(val)
+		if _, err := w.Write(val); err != nil {
+			logger.Log.Debug("Failed to write response:", err)
+		}
 	}
 }
 
@@ -146,7 +148,9 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 		sort.Strings(keys)
 		// Write the metrics to the response.
 		for _, k := range keys {
-			fmt.Fprintf(w, "%s = %s\n", k, metrics[k])
+			if _, err := fmt.Fprintf(w, "%s = %s\n", k, metrics[k]); err != nil {
+				logger.Log.Debug("Failed to write metric:", err)
+			}
 		}
 	}
 }
