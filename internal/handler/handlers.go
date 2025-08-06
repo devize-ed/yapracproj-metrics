@@ -42,7 +42,11 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect counter value", http.StatusBadRequest)
 				return
 			}
-			h.storage.AddCounter(r.Context(), metricName, &val)
+			if err := h.storage.AddCounter(r.Context(), metricName, &val); err != nil {
+				logger.Log.Error("Failed to add counter:", err)
+				http.Error(w, "Failed to add counter", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, val)
 
 		case models.Gauge:
@@ -53,7 +57,11 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect gauge value", http.StatusBadRequest)
 				return
 			}
-			h.storage.SetGauge(r.Context(), metricName, &val)
+			if err := h.storage.SetGauge(r.Context(), metricName, &val); err != nil {
+				logger.Log.Error("Failed to set gauge:", err)
+				http.Error(w, "Failed to set gauge", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, val)
 
 		default:

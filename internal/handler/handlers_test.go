@@ -13,14 +13,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func testMemoryStorage(ms *mstorage.MemStorage) {
+func testMemoryStorage(t *testing.T, ms *mstorage.MemStorage) {
 	ctx := context.Background()
 	delta := int64(5)
-	ms.AddCounter(ctx, "testCounter", &delta)
+	if err := ms.AddCounter(ctx, "testCounter", &delta); err != nil {
+		t.Fatalf("Failed to add counter: %v", err)
+	}
 	g1 := 10.5
-	ms.SetGauge(ctx, "testGauge1", &g1)
-	g2 := 10.5
-	ms.SetGauge(ctx, "testGauge2", &g2)
+	if err := ms.SetGauge(ctx, "testGauge1", &g1); err != nil {
+		t.Fatalf("Failed to set gauge: %v", err)
+	}
+	g2 := 1.5
+	if err := ms.SetGauge(ctx, "testGauge2", &g2); err != nil {
+		t.Fatalf("Failed to set gauge: %v", err)
+	}
 }
 
 func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp *resty.Response) {
@@ -78,7 +84,7 @@ func TestListAllHandler(t *testing.T) {
 
 	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
-	testMemoryStorage(ms)
+	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
 	r.Get("/", h.ListMetricsHandler())
@@ -90,7 +96,7 @@ func TestListAllHandler(t *testing.T) {
 		expectedCode int
 		expectedBody string
 	}{
-		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.5\ntestGauge2 = 10.5"},
+		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.5\ntestGauge2 = 1.5"},
 	}
 
 	for _, tt := range tests {
@@ -108,7 +114,7 @@ func TestGetMetricHandler(t *testing.T) {
 
 	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
-	testMemoryStorage(ms)
+	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
 	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())

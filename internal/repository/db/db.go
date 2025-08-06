@@ -17,7 +17,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DB represents a database connection pool.
 type DB struct {
 	pool *pgxpool.Pool
 }
@@ -63,7 +62,7 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// SaveCounter saves the counter to the database.
+// AddCounter adds the counter to the database.
 func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
 	logger.Log.Debug("Saving counter to the database")
 	// Begin a transaction
@@ -79,13 +78,13 @@ func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
 		}
 	}()
 
-	if _, err := tx.Exec(ctx, `
-				INSERT INTO counters (id, delta) 
-				VALUES ($1, $2) 
-				ON CONFLICT (id) DO UPDATE 
-				SET delta = counters.delta + EXCLUDED.delta
-			`, id, &delta); err != nil {
-		return fmt.Errorf("failed to insert counter %s: %w", id, err)
+	if _, err = tx.Exec(ctx, `
+                               INSERT INTO counters (id, delta)
+                               VALUES ($1, $2)
+                               ON CONFLICT (id) DO UPDATE
+                               SET delta = counters.delta + EXCLUDED.delta
+                       `, id, delta); err != nil {
+		return fmt.Errorf("failed to add counter: %w", err)
 
 	}
 
@@ -115,7 +114,7 @@ func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
 	// Query the counter from the database
 	row := tx.QueryRow(ctx, `SELECT delta FROM counters WHERE id = $1`, id)
 	var delta int64
-	if err := row.Scan(&delta); err != nil {
+	if err = row.Scan(&delta); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("counter %s not found: %w", id, err)
 		}
@@ -129,7 +128,7 @@ func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
 	return &delta, nil
 }
 
-// SaveGauge saves the gauge to the database.
+// SetGauge sets the gauge to the database.
 func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 	logger.Log.Debug("Saving gauge to the database")
 	// Begin a transaction
@@ -147,13 +146,13 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 	}()
 
 	// Insert the gauge into the database
-	if _, err := tx.Exec(ctx, `
-                INSERT INTO gauges(id,value)
-                VALUES ($1,$2)
-                ON CONFLICT(id) DO UPDATE
-                SET value = EXCLUDED.value
-			`, id, &value); err != nil {
-		return fmt.Errorf("failed to insert counter %s: %w", id, err)
+	if _, err = tx.Exec(ctx, `
+               INSERT INTO gauges(id,value)
+               VALUES ($1,$2)
+               ON CONFLICT(id) DO UPDATE
+               SET value = EXCLUDED.value
+                       `, id, value); err != nil {
+		return fmt.Errorf("failed to set gauge: %w", err)
 
 	}
 	// Commit the transaction
@@ -163,7 +162,7 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 	return nil
 }
 
-// Save writes the metrics to the database.
+// GetGauge gets the gauge from the database.
 func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 	logger.Log.Debug("Saving gauge to the database")
 	// Begin a transaction
@@ -182,7 +181,7 @@ func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 	// Query the gauge from the database
 	row := tx.QueryRow(ctx, `SELECT value FROM gauges WHERE id = $1`, id)
 	var value float64
-	if err := row.Scan(&value); err != nil {
+	if err = row.Scan(&value); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("gauge %s not found: %w", id, err)
 		}
@@ -198,6 +197,11 @@ func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 
 // SaveBatch saves a batch of metrics to the database.
 func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
+	logger.Log.Debug("Saving batch to the database")
+	// Check if the batch is empty
+	if len(metrics) == 0 {
+		return fmt.Errorf("failed to save batch: empty slice")
+	}
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -218,19 +222,19 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 		case models.Gauge:
 			// Insert the gauge into the database
 			batch.Queue(`
-                INSERT INTO gauges(id,value)
-                VALUES ($1,$2)
-                ON CONFLICT(id) DO UPDATE
-                SET value = EXCLUDED.value
-            `, m.ID, m.Value)
+               INSERT INTO gauges(id,value)
+               VALUES ($1,$2)
+               ON CONFLICT(id) DO UPDATE
+               SET value = EXCLUDED.value
+           `, m.ID, m.Value)
 		case models.Counter:
 			// Insert the counter into the database
 			batch.Queue(`
-                INSERT INTO counters(id,delta)
-                VALUES ($1,$2)
-                ON CONFLICT(id) DO UPDATE
-                SET delta = counters.delta + EXCLUDED.delta
-            `, m.ID, m.Delta)
+               INSERT INTO counters(id,delta)
+               VALUES ($1,$2)
+               ON CONFLICT(id) DO UPDATE
+               SET delta = counters.delta + EXCLUDED.delta
+           `, m.ID, m.Delta)
 		}
 	}
 
@@ -238,7 +242,7 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	br := tx.SendBatch(ctx, batch)
 
 	// Check for errors in the batch execution
-	if err := br.Close(); err != nil {
+	if err = br.Close(); err != nil {
 		return fmt.Errorf("batch close: %w", err)
 	}
 
@@ -249,8 +253,9 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	return nil
 }
 
-// Load reads the metrics from the database.
+// GetAll reads the metrics from the database.
 func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
+	logger.Log.Debug("Loading metrics from the database")
 	tx, err := db.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -262,8 +267,6 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 			}
 		}
 	}()
-
-	logger.Log.Debug("Loading metrics from the database")
 	// create temporary maps to hold the loaded metrics
 	gauge := map[string]float64{}
 	counter := map[string]int64{}
@@ -279,7 +282,7 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 			id    string
 			value float64
 		)
-		if err := rows.Scan(&id, &value); err != nil {
+		if err = rows.Scan(&id, &value); err != nil {
 			return nil, fmt.Errorf("failed to scan gauge row: %w", err)
 		}
 		gauge[id] = value
@@ -296,7 +299,7 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 			id    string
 			delta int64
 		)
-		if err := rows.Scan(&id, &delta); err != nil {
+		if err = rows.Scan(&id, &delta); err != nil {
 			return nil, fmt.Errorf("failed to scan counters row: %w", err)
 		}
 		counter[id] = delta
@@ -361,10 +364,20 @@ func commitWithRetries(ctx context.Context, tx pgx.Tx) error {
 // isErrorRetriable checks for specific PostgreSQL error codes that indicate retriable errors (connection issues).
 func isErrorRetriable(err error) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && (pgErr.Code == pgerrcode.SerializationFailure ||
-		pgErr.Code == pgerrcode.LockNotAvailable ||
-		pgErr.Code == pgerrcode.QueryCanceled) {
-		return true
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.ConnectionException,
+			pgerrcode.ConnectionDoesNotExist,
+			pgerrcode.ConnectionFailure,
+			pgerrcode.SQLClientUnableToEstablishSQLConnection,
+			pgerrcode.SQLServerRejectedEstablishmentOfSQLConnection,
+			pgerrcode.TransactionResolutionUnknown,
+			pgerrcode.ProtocolViolation,
+			pgerrcode.SerializationFailure,
+			pgerrcode.LockNotAvailable,
+			pgerrcode.QueryCanceled:
+			return true
+		}
 	}
 	return false
 }

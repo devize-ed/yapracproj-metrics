@@ -122,7 +122,11 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 				return
 			}
 			r.Body = cr
-			defer cr.Close()
+			defer func() {
+				if err := cr.Close(); err != nil {
+					logger.Log.Debugf("error closing request body: ", err)
+				}
+			}()
 
 			r.Header.Del("Content-Encoding")
 			r.Header.Del("Content-Length")
@@ -135,7 +139,11 @@ func MiddlewareGzip(h http.Handler) http.Handler {
 		if supportsGzip {
 			cw := newCompressWriter(w, true)
 			w.Header().Set("Content-Encoding", "gzip")
-			defer cw.Close()
+			defer func() {
+				if err := cw.Close(); err != nil {
+					logger.Log.Debugf("error closing response body: ", err)
+				}
+			}()
 			ow = cw
 		}
 		h.ServeHTTP(ow, r)

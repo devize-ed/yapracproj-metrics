@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
@@ -239,17 +241,40 @@ func Compress(data models.Metrics) ([]byte, error) {
 }
 
 func clientWithRetries(client *resty.Client) *resty.Client {
+	// Set the retry count and backoff delay.
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
 
+	// Set the retry count and backoff delay.
 	client.SetRetryCount(len(backoffs)).
 		SetRetryAfter(func(c *resty.Client, r *resty.Response) (time.Duration, error) {
+			// Get the retry count.
 			n := r.Request.Attempt - 1
 			if n >= len(backoffs) {
 				n = len(backoffs) - 1
 			}
+			// Get the backoff delay.
 			delay := backoffs[n]
 			logger.Log.Debugf("retry attempt %d, waiting %s", r.Request.Attempt, delay)
 			return delay, nil
+		}).
+		AddRetryCondition(func(r *resty.Response, err error) bool {
+			// Check if the error is retryable.
+			if err != nil && isErrorRetryable(err) {
+				logger.Log.Warnf("network error: %v — will retry", err)
+				return true
+			}
+
+			return false
 		})
 	return client
+}
+
+// isErrorRetryable checks if the error is retryable.
+func isErrorRetryable(err error) bool {
+	// Check if the error is a network error.
+	var ne net.Error
+	if errors.As(err, &ne) {
+		return true
+	}
+	return false
 }

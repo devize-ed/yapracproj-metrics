@@ -38,7 +38,11 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				return
 			}
 
-			h.storage.AddCounter(r.Context(), metricName, &metricValue)
+			if err := h.storage.AddCounter(r.Context(), metricName, &metricValue); err != nil {
+				logger.Log.Error("Failed to add counter:", err)
+				http.Error(w, "Failed to add counter", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
@@ -49,7 +53,11 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				http.Error(w, "empty gauge value", http.StatusNotFound)
 				return
 			}
-			h.storage.SetGauge(r.Context(), metricName, &metricValue)
+			if err := h.storage.SetGauge(r.Context(), metricName, &metricValue); err != nil {
+				logger.Log.Error("Failed to set gauge:", err)
+				http.Error(w, "Failed to set gauge", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
 		default:
