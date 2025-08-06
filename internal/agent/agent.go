@@ -273,8 +273,5 @@ func clientWithRetries(client *resty.Client) *resty.Client {
 func isErrorRetryable(err error) bool {
 	// Check if the error is a network error.
 	var ne net.Error
-	if errors.As(err, &ne) {
-		return true
-	}
-	return false
+	return errors.As(err, &ne)
 }
