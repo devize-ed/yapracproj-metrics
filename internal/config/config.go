@@ -52,6 +52,15 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return cfg, err
 	}
+	if err := env.Parse(&cfg.Connection); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Repository.FSConfig); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Repository.DBConfig); err != nil {
+		return cfg, err
+	}
 
 	// Validate the configuration.
 	if cfg.Repository.FSConfig.StoreInterval < 0 {
@@ -76,8 +85,14 @@ func GetAgentConfig() (AgentConfig, error) {
 	// Parse flags.
 	flag.Parse()
 
-	// Environment variables can override the flags.
+	// Override with environment variables if they exist.
 	if err := env.Parse(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Connection); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Agent); err != nil {
 		return cfg, err
 	}
 

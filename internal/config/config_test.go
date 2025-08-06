@@ -24,20 +24,20 @@ func TestGetServerConfig(t *testing.T) {
 		{
 			name: "Environment variables",
 			envVars: map[string]string{
-				"ADDRESS":           ":8081",
+				"ADDRESS":           "localhost:8081",
 				"STORE_INTERVAL":    "500",
 				"FILE_STORAGE_PATH": "./test.json",
 				"RESTORE":           "false",
-				"DATABASE_DSN":      "host=localhost user=postgres password=secret dbname=test sslmode=disable",
+				"DATABASE_DSN":      "user:password@/dbname",
 				"LOG_LEVEL":         "error",
 			},
-			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=false"},
+			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=true"},
 			expectedConfig: ServerConfig{
-				Connection: ServerConn{Host: ":7070"},
+				Connection: ServerConn{Host: "localhost:8081"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
-						StoreInterval: 400,
-						FPath:         "./non.json",
+						StoreInterval: 500,
+						FPath:         "./test.json",
 						Restore:       false,
 					},
 					DBConfig: db.DBConfig{
@@ -146,7 +146,7 @@ func TestGetAgentConfig(t *testing.T) {
 		{
 			name: "Environment variables",
 			envVars: map[string]string{
-				"ADDRESS":            ":8081",
+				"ADDRESS":            "localhost:8081",
 				"REPORT_INTERVAL":    "5",
 				"POLL_INTERVAL":      "1",
 				"LOG_LEVEL":          "error",
@@ -155,12 +155,12 @@ func TestGetAgentConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: ":7070"},
+				Connection: AgentConn{Host: "localhost:8081"},
 				Agent: agentcfg.AgentConfig{
-					ReportInterval: 30,
-					PollInterval:   10,
-					EnableGzip:     false,
-					EnableTestGet:  false,
+					ReportInterval: 5,
+					PollInterval:   1,
+					EnableGzip:     true,
+					EnableTestGet:  true,
 				},
 				LogLevel: "error",
 			},
