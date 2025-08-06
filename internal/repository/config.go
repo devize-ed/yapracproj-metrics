@@ -6,6 +6,6 @@ import (
 )
 
 type RepositoryConfig struct {
-	FileConfig fs.FStorageConfig // Configuration for file storage.
-	DBConfig   db.DBConfig   // Configuration for database storage.
+	FSConfig fs.FStorageConfig // Configuration for file storage.
+	DBConfig db.DBConfig       // Configuration for database storage.
 }

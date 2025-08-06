@@ -10,7 +10,7 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	cfg "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/config"
-	"github.com/devize-ed/yapracproj-metrics.git/migrations"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/migrations"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

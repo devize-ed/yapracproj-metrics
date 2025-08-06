@@ -37,9 +37,9 @@ func NewRepository(ctx context.Context, config RepositoryConfig) Repository {
 			logger.Log.Errorf("failed to create repository: %v", err)
 		}
 		return db
-	} else if config.FileConfig.FPath != "" {
+	} else if config.FSConfig.FPath != "" {
 		logger.Log.Info("Using file storage")
-		return fstorage.NewFileSaver(ctx, &config.FileConfig, mstorage.NewMemStorage())
+		return fstorage.NewFileSaver(ctx, &config.FSConfig, mstorage.NewMemStorage())
 	} else {
 		logger.Log.Info("Using in-memory storage")
 		return mstorage.NewMemStorage()

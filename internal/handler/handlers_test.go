@@ -7,17 +7,20 @@ import (
 	"testing"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	storage "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 )
 
-func testMemoryStorage(ms *storage.MemStorage) {
+func testMemoryStorage(ms *mstorage.MemStorage) {
 	ctx := context.Background()
-	ms.AddCounter(ctx, "testCounter", 5)
-	ms.SetGauge(ctx, "testGauge1", 10.5)
-	ms.SetGauge(ctx, "testGauge2", 10.5)
+	delta := int64(5)
+	ms.AddCounter(ctx, "testCounter", &delta)
+	g1 := 10.5
+	ms.SetGauge(ctx, "testGauge1", &g1)
+	g2 := 10.5
+	ms.SetGauge(ctx, "testGauge2", &g2)
 }
 
 func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp *resty.Response) {
@@ -34,7 +37,7 @@ func TestUpdateHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
@@ -73,7 +76,7 @@ func TestListAllHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 
@@ -103,7 +106,7 @@ func TestGetMetricHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 

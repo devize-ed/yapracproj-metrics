@@ -9,6 +9,8 @@ import (
 
 	agentcfg "github.com/devize-ed/yapracproj-metrics.git/internal/agent/config"
 	repo "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	db "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/config"
+	fs "github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage/config"
 )
 
 func TestGetServerConfig(t *testing.T) {
@@ -31,15 +33,15 @@ func TestGetServerConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=false"},
 			expectedConfig: ServerConfig{
-				Connection: serverConn{Host: ":8081"},
+				Connection: ServerConn{Host: ":7070"},
 				Repository: repo.RepositoryConfig{
-					FileConfig: repo.RepositoryConfig.FileConfig{
-						StoreInterval: 500,
-						FPath:         "./test.json",
+					FSConfig: fs.FStorageConfig{
+						StoreInterval: 400,
+						FPath:         "./non.json",
 						Restore:       false,
 					},
-					DBConfig: repo.DBConfig{
-						DatabaseDSN: "host=localhost user=postgres password=secret dbname=test sslmode=disable",
+					DBConfig: db.DBConfig{
+						DatabaseDSN: "user:password@/dbname",
 					},
 				},
 				LogLevel: "error",
@@ -51,14 +53,14 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-d=user:password@/dbname", "-r=false"},
 			expectedConfig: ServerConfig{
-				Connection: serverConn{Host: ":7070"},
+				Connection: ServerConn{Host: ":7070"},
 				Repository: repo.RepositoryConfig{
-					FileConfig: repo.FileRepositoryConfig{
+					FSConfig: fs.FStorageConfig{
 						StoreInterval: 400,
 						FPath:         "./test1.json",
 						Restore:       false,
 					},
-					DBConfig: repo.DBRepositoryConfig{
+					DBConfig: db.DBConfig{
 						DatabaseDSN: "user:password@/dbname",
 					},
 				},
@@ -71,14 +73,14 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: ServerConfig{
-				Connection: serverConn{Host: "localhost:8080"},
+				Connection: ServerConn{Host: "localhost:8080"},
 				Repository: repo.RepositoryConfig{
-					FileConfig: repo.FileRepositoryConfig{
+					FSConfig: fs.FStorageConfig{
 						StoreInterval: 300,
 						FPath:         "",
 						Restore:       false,
 					},
-					DBConfig: repo.DBRepositoryConfig{
+					DBConfig: db.DBConfig{
 						DatabaseDSN: "",
 					},
 				},
@@ -90,21 +92,20 @@ func TestGetServerConfig(t *testing.T) {
 			name: "negative StoreInterval",
 			envVars: map[string]string{
 				"ADDRESS":           ":8081",
-				"STORE_INTERVAL":    "-1",
 				"FILE_STORAGE_PATH": "./test.json",
 				"RESTORE":           "false",
 				"LOG_LEVEL":         "error",
 			},
-			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=false"},
+			args: []string{"-a=:7070", "-i=-1", "-f=./non.json", "-d=user:password@/dbname", "-r=false"},
 			expectedConfig: ServerConfig{
-				Connection: serverConn{Host: ":8081"},
+				Connection: ServerConn{Host: ":7070"},
 				Repository: repo.RepositoryConfig{
-					FileConfig: repo.FileRepositoryConfig{
-						StoreInterval: 500,
-						FPath:         "./test.json",
+					FSConfig: fs.FStorageConfig{
+						StoreInterval: -1,
+						FPath:         "./non.json",
 						Restore:       false,
 					},
-					DBConfig: repo.DBRepositoryConfig{
+					DBConfig: db.DBConfig{
 						DatabaseDSN: "user:password@/dbname",
 					},
 				},
@@ -154,12 +155,12 @@ func TestGetAgentConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
-				Connection: agentConn{Host: ":8081"},
+				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
-					ReportInterval: 5,
-					PollInterval:   1,
-					EnableGzip:     true,
-					EnableTestGet:  true,
+					ReportInterval: 30,
+					PollInterval:   10,
+					EnableGzip:     false,
+					EnableTestGet:  false,
 				},
 				LogLevel: "error",
 			},
@@ -170,7 +171,7 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
-				Connection: agentConn{Host: ":7070"},
+				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 5,
 					PollInterval:   1,
@@ -186,7 +187,7 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: AgentConfig{
-				Connection: agentConn{Host: ":8080"},
+				Connection: AgentConn{Host: ":8080"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 10,
 					PollInterval:   2,
@@ -201,20 +202,18 @@ func TestGetAgentConfig(t *testing.T) {
 			name: "negative PollInterval",
 			envVars: map[string]string{
 				"ADDRESS":            ":8081",
-				"REPORT_INTERVAL":    "5",
-				"POLL_INTERVAL":      "-1",
 				"LOG_LEVEL":          "error",
 				"ENABLE_GZIP":        "true",
 				"ENABLE_GET_METRICS": "true",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
+			args: []string{"-a=:7070", "-r=30", "-p=-1", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
-				Connection: agentConn{Host: ":8081"},
+				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
-					ReportInterval: 5,
-					PollInterval:   1,
-					EnableGzip:     true,
-					EnableTestGet:  true,
+					ReportInterval: 30,
+					PollInterval:   -1,
+					EnableGzip:     false,
+					EnableTestGet:  false,
 				},
 				LogLevel: "error",
 			},
@@ -242,5 +241,3 @@ func TestGetAgentConfig(t *testing.T) {
 		})
 	}
 }
-
-// ...existing code...

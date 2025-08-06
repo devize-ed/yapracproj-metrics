@@ -12,23 +12,25 @@ import (
 
 // ServerConfig holds the configuration for the server.
 type ServerConfig struct {
-	Connection serverConn
+	Connection ServerConn
 	Repository repository.RepositoryConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
 }
 
-type serverConn struct {
+// ServerConn holds server address configuration.
+type ServerConn struct {
 	Host string `env:"ADDRESS"` // Address of the HTTP server.
 }
 
 // AgentConfig holds the configuration for the agent.
 type AgentConfig struct {
-	Connection agentConn
+	Connection AgentConn
 	Agent      agent.AgentConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
 }
 
-type agentConn struct {
+// AgentConn holds agent connection configuration.
+type AgentConn struct {
 	Host string `env:"ADDRESS"` // Address of the HTTP server.
 }
 
@@ -38,10 +40,10 @@ func GetServerConfig() (ServerConfig, error) {
 
 	// Set CLI flags.
 	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address of HTTP server")
-	flag.IntVar(&cfg.Repository.FileConfig.StoreInterval, "i", 300, "store interval in seconds")
-	flag.StringVar(&cfg.Repository.FileConfig.FPath, "f", "", "file path for storing metrics")
+	flag.IntVar(&cfg.Repository.FSConfig.StoreInterval, "i", 300, "store interval in seconds")
+	flag.StringVar(&cfg.Repository.FSConfig.FPath, "f", "", "file path for storing metrics")
 	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
-	flag.BoolVar(&cfg.Repository.FileConfig.Restore, "r", false, "restore metrics from file")
+	flag.BoolVar(&cfg.Repository.FSConfig.Restore, "r", false, "restore metrics from file")
 
 	// Parse flags.
 	flag.Parse()
@@ -52,8 +54,8 @@ func GetServerConfig() (ServerConfig, error) {
 	}
 
 	// Validate the configuration.
-	if cfg.Repository.FileConfig.StoreInterval < 0 {
-		return cfg, fmt.Errorf("STORE_INTERVAL must be non-negative (got %d)", cfg.Repository.FileConfig.StoreInterval)
+	if cfg.Repository.FSConfig.StoreInterval < 0 {
+		return cfg, fmt.Errorf("STORE_INTERVAL must be non-negative (got %d)", cfg.Repository.FSConfig.StoreInterval)
 	}
 
 	cfg.Connection.Host = strings.TrimPrefix(cfg.Connection.Host, "http://")

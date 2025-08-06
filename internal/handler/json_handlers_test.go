@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	storage "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/update"
-	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
@@ -69,7 +69,7 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	endpoint := "/value"
-	ms := storage.NewMemStorage(0, storage.NewStubStorage())
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 	testMemoryStorage(ms)
 

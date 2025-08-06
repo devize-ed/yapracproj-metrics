@@ -3,8 +3,8 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"github.com/jackc/pgx/v5"
 )
 
 // queryTracer implements the pgx.Tracer interface to log query execution details.

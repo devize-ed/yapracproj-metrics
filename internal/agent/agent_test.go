@@ -46,7 +46,8 @@ func TestSendMetric(t *testing.T) {
 
 	host := strings.TrimPrefix(srv.URL, "http://")
 	client := resty.New()
-	cfg := config.AgentConfig{Host: host}
+	cfg := config.AgentConfig{}
+	cfg.Connection.Host = host
 
 	agent := NewAgent(client, cfg)
 
@@ -92,7 +93,8 @@ func TestGetMetric(t *testing.T) {
 
 	host := strings.TrimPrefix(srv.URL, "http://")
 	client := resty.New()
-	cfg := config.AgentConfig{Host: host}
+	cfg := config.AgentConfig{}
+	cfg.Connection.Host = host
 
 	agent := NewAgent(client, cfg)
 
