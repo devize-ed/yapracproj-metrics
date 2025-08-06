@@ -2,203 +2,46 @@ package repository
 
 import (
 	"context"
-	"fmt"
-	"maps"
-	"strconv"
-	"sync"
-	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/db"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage"
+	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 )
 
-// Repository interface defines the methods for saving and loading metrics.
-type ExtStorage interface {
-	Save(ctx context.Context, gauge map[string]float64, counter map[string]int64) error
-	Load(ctx context.Context) (map[string]float64, map[string]int64, error)
-	SaveBatch(ctx context.Context, metrics []models.Metrics) error
+type Repository interface {
+	// SetGauge sets a gauge metric with the given name and value.
+	SetGauge(ctx context.Context, name string, value *float64) error
+	// GetGauge retrieves the value of a gauge metric by its name.
+	GetGauge(ctx context.Context, name string) (*float64, error)
+	// AddCounter increments a counter metric by the given delta.
+	AddCounter(ctx context.Context, name string, delta *int64) error
+	// GetCounter retrieves the value of a counter metric by its name.
+	GetCounter(ctx context.Context, name string) (*int64, error)
+	// ListAll returns all available metrics
+	GetAll(ctx context.Context) (map[string]string, error)
+	// SaveBatchToRepo saves a batch of metrics to the repository.
+	SaveBatch(ctx context.Context, batch []models.Metrics) error
+	// Ping checks the connection to the repository.
+	Ping(ctx context.Context) error
+	// Close closes the repository.
+	Close() error
 }
 
-// MemStorage is the in-memory server storage for the metrics.
-type MemStorage struct {
-	mu         sync.RWMutex
-	Gauge      map[string]float64
-	Counter    map[string]int64
-	syncSave   bool
-	ExtStorage ExtStorage
-}
-
-// MemStorage constructor.
-func NewMemStorage(storeInterval int, es ExtStorage) *MemStorage {
-	return &MemStorage{
-		Gauge:      make(map[string]float64),
-		Counter:    make(map[string]int64),
-		syncSave:   storeInterval == 0,
-		ExtStorage: es,
-	}
-}
-
-// SetGauge sets the value of a gauge metric by its name.
-func (ms *MemStorage) SetGauge(ctx context.Context, name string, value float64) {
-	ms.mu.Lock()
-	ms.Gauge[name] = value
-	ms.mu.Unlock()
-
-	if ms.syncSave {
-		err := ms.SaveToRepo(ctx)
+func NewRepository(ctx context.Context, config RepositoryConfig) Repository {
+	if config.DBConfig.DatabaseDSN != "" {
+		logger.Log.Info("Using database storage")
+		db, err := db.NewDB(ctx, &config.DBConfig)
 		if err != nil {
-			logger.Log.Errorf("failed to save metrics: %v", err)
+			logger.Log.Errorf("failed to create repository: %v", err)
 		}
+		return db
+	} else if config.FileConfig.FPath != "" {
+		logger.Log.Info("Using file storage")
+		return fstorage.NewFileSaver(ctx, &config.FileConfig, mstorage.NewMemStorage())
+	} else {
+		logger.Log.Info("Using in-memory storage")
+		return mstorage.NewMemStorage()
 	}
-}
-
-// GetGauge retrieves the value of a gauge metric by its name.
-func (ms *MemStorage) GetGauge(ctx context.Context, name string) (float64, bool) {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
-	val, ok := ms.Gauge[name]
-	return val, ok
-}
-
-// AddCounter increments the value of a counter metric by the given delta.
-func (ms *MemStorage) AddCounter(ctx context.Context, name string, delta int64) {
-	ms.mu.Lock()
-	ms.Counter[name] += delta
-	ms.mu.Unlock()
-
-	if ms.syncSave {
-		err := ms.SaveToRepo(ctx)
-		if err != nil {
-			logger.Log.Errorf("failed to save metrics: %v", err)
-		}
-	}
-}
-
-// GetCounter retrieves the value of a counter metric by its name.
-func (ms *MemStorage) GetCounter(ctx context.Context, name string) (int64, bool) {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
-	val, ok := ms.Counter[name]
-	return val, ok
-}
-
-// Get all the saved metrics from the storage and return them and values as strings.
-func (ms *MemStorage) ListAll(ctx context.Context) map[string]string {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
-	result := make(map[string]string)
-	for k, v := range ms.Gauge {
-		result[k] = strconv.FormatFloat(v, 'f', -1, 64)
-	}
-	for k, v := range ms.Counter {
-		result[k] = strconv.FormatInt(v, 10)
-	}
-	return result
-}
-
-// SaveToRepo writes the metrics to the repository.
-func (ms *MemStorage) SaveToRepo(ctx context.Context) error {
-
-	// copy the metrics to avoid holding the lock while saving.
-	ms.mu.RLock()
-	gCopy := maps.Clone(ms.Gauge)
-	cCopy := maps.Clone(ms.Counter)
-	ms.mu.RUnlock()
-
-	// Save the metrics to the repository.
-	if err := ms.ExtStorage.Save(ctx, gCopy, cCopy); err != nil {
-		return fmt.Errorf("failed to save metrics: %w", err)
-	}
-	return nil
-
-}
-
-// LoadFromRepo retrieves the metrics from the repository and restores them to the storage.
-func (ms *MemStorage) LoadFromRepo(ctx context.Context) error {
-	// Load the metrics from the repository.
-	gauge, counter, err := ms.ExtStorage.Load(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load metrics: %w", err)
-	}
-
-	// Update the storage with the loaded metrics.
-	ms.mu.Lock()
-	ms.Gauge = gauge
-	ms.Counter = counter
-	ms.mu.Unlock()
-
-	return nil
-}
-
-// Ping delegates the ping request to the underlying external storage if it implements the Ping method.
-func (ms *MemStorage) Ping(ctx context.Context) error {
-	if p, ok := ms.ExtStorage.(interface{ Ping(context.Context) error }); ok {
-		return p.Ping(ctx)
-	}
-	return fmt.Errorf("external storage does not support Ping")
-}
-
-// IntervalSaver periodically saves the metrics to the file
-func (ms *MemStorage) IntervalSaver(ctx context.Context, interval int) {
-	// If the interval is 0, it saves only when the server is closing.
-	logger.Log.Debugf("starting interval saver with interval %d seconds", interval)
-	if interval == 0 {
-		go func() {
-			<-ctx.Done()
-			saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := ms.SaveToRepo(saveCtx); err != nil {
-				logger.Log.Errorf("final save (sync mode) failed: %v", err)
-			}
-		}()
-		return
-	}
-
-	// Create a ticker to save the metrics on interval
-	go func() {
-		ticker := time.NewTicker(time.Duration(interval) * time.Second)
-		defer ticker.Stop()
-
-		// Start ticker loop.
-		for {
-			select {
-			case <-ticker.C: // Save the metrics on interval
-				if err := ms.SaveToRepo(ctx); err != nil {
-					logger.Log.Errorf("periodic save failed: %v", err)
-				}
-			case <-ctx.Done(): // Exit the loop if context is done
-				logger.Log.Debug("Interval saver stopped")
-				return
-			}
-		}
-	}()
-}
-
-// SaveBatch saves a batch of metrics to the storage.
-func (ms *MemStorage) SaveBatchToRepo(ctx context.Context, batch []models.Metrics) error {
-	// Save metrics to the in-memory storage for backward compatibility.
-	for _, m := range batch {
-		switch m.MType {
-		case models.Gauge:
-			if m.Value == nil {
-				return fmt.Errorf("gauge metric %s has no value", m.ID)
-			} else {
-				ms.SetGauge(ctx, m.ID, *m.Value)
-			}
-		case models.Counter:
-			if m.Delta == nil {
-				return fmt.Errorf("counter metric %s has no delta", m.ID)
-			} else {
-				ms.AddCounter(ctx, m.ID, *m.Delta)
-			}
-		default:
-			return fmt.Errorf("unknown metric type %s for metric %s", m.MType, m.ID)
-		}
-	}
-
-	// Save the batch of metrics to the external storage.
-	if err := ms.ExtStorage.SaveBatch(ctx, batch); err != nil {
-		return fmt.Errorf("failed to save batch metrics: %w", err)
-	}
-	return nil
 }

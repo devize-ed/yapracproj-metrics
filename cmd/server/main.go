@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,9 +10,7 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	st "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
-	db "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fsaver"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
@@ -35,72 +32,28 @@ func run() error {
 	}
 	defer logger.Log.Sync()
 
-	logger.Log.Infof("Server config: interval=%d restore=%v host=%s",
-		cfg.StoreInterval, cfg.Restore, cfg.Host)
-
-	// create a new in-memory storage
-	ms, err := initStorage(context.Background(), cfg)
-	if err != nil {
-		return fmt.Errorf("failed to initialize storage: %w", err)
+	// Initialize the repository based on the configuration
+	repository := repository.NewRepository(context.Background(), cfg.Repository)
+	if err := repository.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to initialize repository: %w", err)
 	}
-	if closer, ok := ms.ExtStorage.(interface{ Close() error }); ok {
-		defer func() {
-			if err := closer.Close(); err != nil {
-				logger.Log.Errorf("failed to close storage: %v", err)
-				return
-			}
-		}()
-	}
+	defer func() {
+		if err := repository.Close(); err != nil {
+			logger.Log.Errorf("failed to close repository: %v", err)
+		}
+	}()
 
 	// create a context that listens for OS signals to shut down the server
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// start the interval saver to periodically save metrics to the file
-	ms.IntervalSaver(ctx, cfg.StoreInterval)
-
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(ms)
-	srv := server.NewServer(cfg, ms, h)
+	h := handler.NewHandler(repository)
+	srv := server.NewServer(cfg, h)
 
 	if err = srv.Serve(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)
 	}
 
 	return nil
-}
-
-// initStorage initializes the storage based on the configuration.
-func initStorage(ctx context.Context, cfg config.ServerConfig) (*st.MemStorage, error) {
-	// Initialize the storage based on the configuration
-	var (
-		storage st.ExtStorage
-		err     error
-	)
-
-	if cfg.DatabaseDSN != "" {
-		logger.Log.Info("Using database storage with DSN: %s", cfg.DatabaseDSN)
-		storage, err = db.NewDB(ctx, cfg.DatabaseDSN)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize database connection: %w", err)
-		}
-	} else if cfg.FPath != "" {
-		logger.Log.Info("Using file storage: %s", cfg.FPath)
-		storage = fsaver.NewFileSaver(cfg.FPath)
-	} else {
-		logger.Log.Info("External storage is not specified, using in-memory storage")
-		storage = st.NewStubStorage()
-	}
-
-	// Create a new in-memory storage
-	ms := st.NewMemStorage(cfg.StoreInterval, storage)
-
-	// If restore is enabled, load the metrics from the repository
-	if cfg.Restore {
-		logger.Log.Info("Restoring metrics from repository")
-		if err := ms.LoadFromRepo(ctx); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("load metrics: %w", err)
-		}
-	}
-	return ms, nil
 }

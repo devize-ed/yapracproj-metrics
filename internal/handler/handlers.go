@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -9,27 +8,17 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	repository "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/go-chi/chi"
 )
 
-// Repository defines the storage contract used by handler and mem-storage.
-type Repository interface {
-	SetGauge(ctx context.Context, name string, value float64)
-	GetGauge(ctx context.Context, name string) (float64, bool)
-	AddCounter(ctx context.Context, name string, delta int64)
-	GetCounter(ctx context.Context, name string) (int64, bool)
-	ListAll(ctx context.Context) map[string]string
-	SaveBatchToRepo(ctx context.Context, batch []models.Metrics) error
-	Ping(ctx context.Context) error
-}
-
 // Handler wraps the storage.
 type Handler struct {
-	storage Repository
+	storage repository.Repository
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r Repository) *Handler {
+func NewHandler(r repository.Repository) *Handler {
 	return &Handler{
 		storage: r,
 	}
@@ -53,7 +42,7 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect counter value", http.StatusBadRequest)
 				return
 			}
-			h.storage.AddCounter(r.Context(), metricName, val)
+			h.storage.AddCounter(r.Context(), metricName, &val)
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, val)
 
 		case models.Gauge:
@@ -64,7 +53,7 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect gauge value", http.StatusBadRequest)
 				return
 			}
-			h.storage.SetGauge(r.Context(), metricName, val)
+			h.storage.SetGauge(r.Context(), metricName, &val)
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, val)
 
 		default:
@@ -88,19 +77,15 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 		metricType := chi.URLParam(r, "metricType")
 
 		// Initialize variables to find and convert the metric value
-		var (
-			val []byte
-			ok  bool
-		)
+		var val []byte
 
 		// Handle different metric types, if unknown -> response as http.StatusBadRequest.
 		switch metricType {
 		case models.Counter:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			var got int64
-			got, ok = h.storage.GetCounter(r.Context(), metricName)
-			if ok {
-				val = []byte(strconv.FormatInt(got, 10))
+			got, err := h.storage.GetCounter(r.Context(), metricName)
+			if err == nil {
+				val = []byte(strconv.FormatInt(*got, 10))
 			} else {
 				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
@@ -108,10 +93,9 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			}
 		case models.Gauge:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			var got float64
-			got, ok = h.storage.GetGauge(r.Context(), metricName)
-			if ok {
-				val = []byte(strconv.FormatFloat(got, 'f', -1, 64))
+			got, err := h.storage.GetGauge(r.Context(), metricName)
+			if err == nil {
+				val = []byte(strconv.FormatFloat(*got, 'f', -1, 64))
 			} else {
 				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
@@ -137,7 +121,12 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get the map with all the metrics from the storage.
-		metrics := h.storage.ListAll(r.Context())
+		metrics, err := h.storage.GetAll(r.Context())
+		if err != nil {
+			logger.Log.Error("Failed to get all metrics:", err)
+			http.Error(w, "Failed to get all metrics", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// Sort the keys to ensure consistent order.

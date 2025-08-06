@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	cfg "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/config"
 	"github.com/devize-ed/yapracproj-metrics.git/migrations"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
@@ -21,16 +23,16 @@ type DB struct {
 }
 
 // NewDB provides the new data base connection with the provided configuration.
-func NewDB(ctx context.Context, dsn string) (*DB, error) {
-	logger.Log.Debugf("Connecting to database with DSN: %s", dsn)
+func NewDB(ctx context.Context, cfg *cfg.DBConfig) (*DB, error) {
+	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
 
 	// Run migrations before establishing the connection
-	if err := migrations.RunMigrations(dsn, true); err != nil {
+	if err := migrations.RunMigrations(cfg.DatabaseDSN, true); err != nil {
 		return nil, fmt.Errorf("failed to run DB migrations: %w", err)
 	}
 
 	// Initialize a new connection pool with the provided DSN
-	pool, err := initPool(ctx, dsn)
+	pool, err := initPool(ctx, cfg.DatabaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise a connection pool: %w", err)
 	}
@@ -61,37 +63,30 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// Save writes the metrics to the database.
-func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[string]int64) error {
-	logger.Log.Debug("Saving metrics to the database")
+// SaveCounter saves the counter to the database.
+func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
+	logger.Log.Debug("Saving counter to the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
-
-	// Prepare and execute the SQL statements to insert or update gauges
-	for id, val := range gauges {
-		if _, err := tx.Exec(ctx, `INSERT INTO gauges (id, value) 
-				VALUES ($1, $2) 
-				ON CONFLICT (id) DO UPDATE 
-				SET value = EXCLUDED.value 
-			`, id, val); err != nil {
-			return fmt.Errorf("failed to insert gauge %s: %w", id, err)
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
 		}
-	}
+	}()
 
-	// Prepare and execute the SQL statements to insert or update counters
-	for id, val := range counters {
-		if _, err := tx.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 				INSERT INTO counters (id, delta) 
 				VALUES ($1, $2) 
 				ON CONFLICT (id) DO UPDATE 
 				SET delta = counters.delta + EXCLUDED.delta
-			`, id, val); err != nil {
-			return fmt.Errorf("failed to insert counter %s: %w", id, err)
-		}
+			`, id, &delta); err != nil {
+		return fmt.Errorf("failed to insert counter %s: %w", id, err)
+
 	}
 
 	// Commit the transaction
@@ -101,6 +96,106 @@ func (db *DB) Save(ctx context.Context, gauges map[string]float64, counters map[
 	return nil
 }
 
+// GetCounter gets the counter from the database.
+func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
+	logger.Log.Debug("Get counter from the database")
+	// Begin a transaction
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
+
+	// Query the counter from the database
+	row := tx.QueryRow(ctx, `SELECT delta FROM counters WHERE id = $1`, id)
+	var delta int64
+	if err := row.Scan(&delta); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("counter %s not found: %w", id, err)
+		}
+		return nil, fmt.Errorf("failed to query counter %s: %w", id, err)
+	}
+
+	// Commit the transaction
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return nil, fmt.Errorf("commit error: %w", err)
+	}
+	return &delta, nil
+}
+
+// SaveGauge saves the gauge to the database.
+func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
+	logger.Log.Debug("Saving gauge to the database")
+	// Begin a transaction
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
+
+	// Insert the gauge into the database
+	if _, err := tx.Exec(ctx, `
+                INSERT INTO gauges(id,value)
+                VALUES ($1,$2)
+                ON CONFLICT(id) DO UPDATE
+                SET value = EXCLUDED.value
+			`, id, &value); err != nil {
+		return fmt.Errorf("failed to insert counter %s: %w", id, err)
+
+	}
+	// Commit the transaction
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return fmt.Errorf("commit error: %w", err)
+	}
+	return nil
+}
+
+// Save writes the metrics to the database.
+func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
+	logger.Log.Debug("Saving gauge to the database")
+	// Begin a transaction
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
+
+	// Query the gauge from the database
+	row := tx.QueryRow(ctx, `SELECT value FROM gauges WHERE id = $1`, id)
+	var value float64
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("gauge %s not found: %w", id, err)
+		}
+		return nil, fmt.Errorf("failed to query gauge %s: %w", id, err)
+	}
+
+	// Commit the transaction
+	if err := commitWithRetries(ctx, tx); err != nil {
+		return nil, fmt.Errorf("commit error: %w", err)
+	}
+	return &value, nil
+}
+
 // SaveBatch saves a batch of metrics to the database.
 func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	// Begin a transaction
@@ -108,13 +203,20 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
 
 	// Prepare a batch of SQL statements to insert or update metrics
 	batch := &pgx.Batch{}
 	for _, m := range metrics {
 		switch m.MType {
 		case models.Gauge:
+			// Insert the gauge into the database
 			batch.Queue(`
                 INSERT INTO gauges(id,value)
                 VALUES ($1,$2)
@@ -122,6 +224,7 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
                 SET value = EXCLUDED.value
             `, m.ID, m.Value)
 		case models.Counter:
+			// Insert the counter into the database
 			batch.Queue(`
                 INSERT INTO counters(id,delta)
                 VALUES ($1,$2)
@@ -147,21 +250,28 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 }
 
 // Load reads the metrics from the database.
-func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, error) {
+func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 	tx, err := db.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return map[string]float64{}, map[string]int64{}, fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+			}
+		}
+	}()
 
 	logger.Log.Debug("Loading metrics from the database")
 	// create temporary maps to hold the loaded metrics
 	gauge := map[string]float64{}
 	counter := map[string]int64{}
 
+	// Query the gauges from the database
 	rows, err := tx.Query(ctx, "SELECT id, value FROM gauges")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query gauges: %w", err)
+		return nil, fmt.Errorf("failed to query gauges: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -170,14 +280,15 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 			value float64
 		)
 		if err := rows.Scan(&id, &value); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan gauge row: %w", err)
+			return nil, fmt.Errorf("failed to scan gauge row: %w", err)
 		}
 		gauge[id] = value
 	}
 
+	// Query the counters from the database
 	rows, err = tx.Query(ctx, "SELECT id, delta FROM counters")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query counters: %w", err)
+		return nil, fmt.Errorf("failed to query counters: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -186,17 +297,24 @@ func (db *DB) Load(ctx context.Context) (map[string]float64, map[string]int64, e
 			delta int64
 		)
 		if err := rows.Scan(&id, &delta); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan counters row: %w", err)
+			return nil, fmt.Errorf("failed to scan counters row: %w", err)
 		}
 		counter[id] = delta
 	}
 
 	// Commit the transaction
 	if err := commitWithRetries(ctx, tx); err != nil {
-		return map[string]float64{}, map[string]int64{}, fmt.Errorf("commit error: %w", err)
+		return nil, fmt.Errorf("commit error: %w", err)
 	}
 	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(gauge), len(counter))
-	return gauge, counter, nil
+	result := make(map[string]string)
+	for k, v := range gauge {
+		result[k] = strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	for k, v := range counter {
+		result[k] = strconv.FormatInt(v, 10)
+	}
+	return result, nil
 }
 
 func (db *DB) Ping(ctx context.Context) error {

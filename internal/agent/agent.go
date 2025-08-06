@@ -31,8 +31,8 @@ func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 
 func (a *Agent) Run() error {
 	// Convert interval values to time.Duration.
-	timePollInterval := time.Duration(a.config.PollInterval) * time.Second
-	timeReportInterval := time.Duration(a.config.ReportInterval) * time.Second
+	timePollInterval := time.Duration(a.config.Agent.PollInterval) * time.Second
+	timeReportInterval := time.Duration(a.config.Agent.ReportInterval) * time.Second
 
 	// Set up the tickers for polling and reporting.
 	pollTicker := time.NewTicker(timePollInterval)
@@ -49,7 +49,7 @@ func (a *Agent) Run() error {
 			logger.Log.Debug("Reporting metrics...")
 
 			// Check whether “test‑get” mode is enabled.
-			if !a.config.EnableTestGet {
+			if !a.config.Agent.EnableTestGet {
 				// Iterate over the storage and send metrics to the server.
 				// for name, val := range a.storage.Counters {
 				// 	if err := SendMetric(a, name, val); err != nil {
@@ -101,7 +101,7 @@ func (a *Agent) Run() error {
 
 // SendMetric sends a single metric to the server.
 func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
-	endpoint := fmt.Sprintf("http://%s/update/", a.config.Host)
+	endpoint := fmt.Sprintf("http://%s/update/", a.config.Connection.Host)
 	body := models.Metrics{
 		ID: metric,
 	}
@@ -129,12 +129,12 @@ func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
 
 // SendMetric sends a single metric to the server.
 func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
-	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Host)
+	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Connection.Host)
 
 	req := a.client.R().
 		SetHeader("Content-Type", "application/json")
 
-	switch a.config.EnableGzip {
+	switch a.config.Agent.EnableGzip {
 	case true:
 		// Marshal the body to JSON.
 		jsonBody, err := json.Marshal(metrics)
@@ -170,7 +170,7 @@ func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
 
 // GetMetric requests a metric from the server for testing purposes.
 func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
-	endpoint := fmt.Sprintf("http://%s/value/", a.config.Host)
+	endpoint := fmt.Sprintf("http://%s/value/", a.config.Connection.Host)
 
 	body := models.Metrics{
 		ID: metric,
@@ -196,7 +196,7 @@ func (a Agent) Request(name string, endpoint string, body models.Metrics) error 
 	req := a.client.R().
 		SetHeader("Content-Type", "application/json")
 
-	switch a.config.EnableGzip {
+	switch a.config.Agent.EnableGzip {
 	case true:
 		buf, err := Compress(body)
 		if err != nil {

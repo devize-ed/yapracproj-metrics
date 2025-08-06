@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
@@ -13,26 +12,19 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
-// Repository matches the storage contract used by handler and mem‑storage.
-type Repository interface {
-	SaveToRepo(ctx context.Context) error
-}
-
 // Server wraps an *http.Server and adds storage and configuration.
 type Server struct {
 	*http.Server
-	storage Repository
-	cfg     config.ServerConfig
+	cfg config.ServerConfig
 }
 
 // NewServer constructs the HTTP server using config and storage.
-func NewServer(cfg config.ServerConfig, storage Repository, h *handler.Handler) *Server {
+func NewServer(cfg config.ServerConfig, h *handler.Handler) *Server {
 	s := &Server{
-		storage: storage,
-		cfg:     cfg,
+		cfg: cfg,
 	}
 	s.Server = &http.Server{
-		Addr:    cfg.Host,
+		Addr:    cfg.Connection.Host,
 		Handler: h.NewRouter(),
 	}
 	return s
@@ -45,17 +37,10 @@ func (s *Server) shutdown(ctx context.Context) error {
 
 // Serve starts the HTTP server, blocks until ctx is cancelled, provide shutdown and save metrics.
 func (s *Server) Serve(ctx context.Context) error {
-	// initialize the wait group to ensure graceful shutdown.
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	// Start the HTTP server in a goroutine.
 	go func() {
-		// Ensure the goroutine signals completion when done.
-		defer wg.Done()
-
 		// Setart the server and listen for incoming requests.
-		logger.Log.Infof("HTTP server listening on %s", s.cfg.Host)
+		logger.Log.Infof("HTTP server listening on %s", s.cfg.Connection.Host)
 		if err := s.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
 			logger.Log.Errorf("listen error: %v", err)
@@ -73,15 +58,6 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	if err := s.shutdown(shutCtx); err != nil {
 		return fmt.Errorf("error shutting down the server: %w", err)
-	}
-
-	// Wait for the server to finish processing requests.
-	wg.Wait()
-
-	// Save metrics before the exit.
-	logger.Log.Debug("Saving before exit ...")
-	if err := s.storage.SaveToRepo(shutCtx); err != nil {
-		return fmt.Errorf("failed to save on exit: %w", err)
 	}
 	return nil
 }

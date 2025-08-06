@@ -30,7 +30,7 @@ func run() error {
 
 	// Log the agent start information.
 	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",
-		cfg.PollInterval, cfg.ReportInterval, cfg.Host, cfg.EnableGzip)
+		cfg.Agent.PollInterval, cfg.Agent.ReportInterval, cfg.Connection.Host, cfg.Agent.EnableGzip)
 
 	client := resty.New() // Initialize HTTP client.
 
