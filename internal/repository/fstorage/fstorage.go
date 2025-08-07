@@ -31,13 +31,12 @@ type FileSaver struct {
 func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *mstorage.MemStorage) *FileSaver {
 	// Create the context that will be used to close the interval saver.
 	fsCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Initialize the FileSaver with the provided configuration and storage.
 	fs := &FileSaver{
 		MemStorage: storage, // internal storage to save the metrics to
 		fname:      config.FPath,
-		syncSave:   config.StoreInterval == 0, // if the interval is 0, saves sycronously
+		syncSave:   config.StoreInterval == 0, // if the interval is 0, saves synchronously
 		cancel:     cancel,
 	}
 
@@ -60,18 +59,20 @@ func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *msto
 // SetGauge sets the value of a gauge metric by its name.
 func (f *FileSaver) SetGauge(ctx context.Context, name string, value *float64) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	// Call the embedded MemStorage method
 	if err := f.MemStorage.SetGauge(ctx, name, value); err != nil {
+		f.mu.Unlock()
 		return fmt.Errorf("failed to set gauge: %w", err)
 	}
 
 	if f.syncSave {
+		// Save to file while holding the lock to ensure consistency
 		if err := f.saveToFile(ctx); err != nil {
+			f.mu.Unlock()
 			return fmt.Errorf("failed to save metrics to file: %w", err)
 		}
 	}
+	f.mu.Unlock()
 	return nil
 }
 
@@ -92,19 +93,20 @@ func (f *FileSaver) GetGauge(ctx context.Context, name string) (*float64, error)
 // AddCounter increments the value of a counter metric by the given delta.
 func (f *FileSaver) AddCounter(ctx context.Context, name string, delta *int64) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	// Call the embedded MemStorage method
 	if err := f.MemStorage.AddCounter(ctx, name, delta); err != nil {
+		f.mu.Unlock()
 		return fmt.Errorf("failed to add counter: %w", err)
 	}
 
 	// If the sync save is set, save the metrics to the file.
 	if f.syncSave {
 		if err := f.saveToFile(ctx); err != nil {
+			f.mu.Unlock()
 			return fmt.Errorf("failed to save metrics to file: %w", err)
 		}
 	}
+	f.mu.Unlock()
 	return nil
 }
 
@@ -244,13 +246,11 @@ func (f *FileSaver) saveToFile(ctx context.Context) error {
 		return nil
 	}
 
-	f.mu.RLock()
-	// Marshal the metrics to JSON format.
+	// Marshal the metrics to JSON format (lock is already held by caller)
 	data, err := json.MarshalIndent(struct {
 		Gauge   map[string]float64 `json:"gauge"`
 		Counter map[string]int64   `json:"counter"`
 	}{f.Gauge, f.Counter}, "", "  ")
-	f.mu.RUnlock()
 	if err != nil {
 		return err
 	}

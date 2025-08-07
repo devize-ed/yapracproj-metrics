@@ -50,19 +50,9 @@ func (a *Agent) Run() error {
 		case <-reportTicker.C: // Send metrics at the reporting interval.
 			logger.Log.Debug("Reporting metrics...")
 
-			// Check whether “test‑get” mode is enabled.
+			// Check whether "test‑get" mode is enabled.
 			if !a.config.Agent.EnableTestGet {
-				// Iterate over the storage and send metrics to the server.
-				// for name, val := range a.storage.Counters {
-				// 	if err := SendMetric(a, name, val); err != nil {
-				// 		logger.Log.Error("error sending ", name, ": ", err)
-				// 	}
-				// }
-				// for name, val := range a.storage.Gauges {
-				// 	if err := SendMetric(a, name, val); err != nil {
-				// 		logger.Log.Error("error sending ", name, ": ", err)
-				// 	}
-				// }
+				// Send metrics as a batch to the server.
 				var metrics = []models.Metrics{}
 				for name, val := range a.storage.Gauges {
 					floatVal := float64(val)
@@ -129,7 +119,7 @@ func SendMetric[T MetricValue](a *Agent, metric string, value T) error {
 	return nil
 }
 
-// SendMetric sends a single metric to the server.
+// SendMetricsBatch sends a batch of metrics to the server.
 func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
 	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Connection.Host)
 

@@ -10,7 +10,6 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
@@ -37,7 +36,7 @@ func run() error {
 	}()
 
 	// Initialize the repository based on the configuration
-	repository := repository.NewRepository(context.Background(), cfg.Repository)
+	repository := handler.NewRepository(context.Background(), cfg.Repository)
 	if err := repository.Ping(context.Background()); err != nil {
 		return fmt.Errorf("failed to initialize repository: %w", err)
 	}

@@ -164,7 +164,7 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 
 // GetGauge gets the gauge from the database.
 func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
-	logger.Log.Debug("Saving gauge to the database")
+	logger.Log.Debug("Getting gauge from the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
