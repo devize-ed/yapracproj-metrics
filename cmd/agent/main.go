@@ -26,16 +26,24 @@ func run() error {
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer logger.Log.Sync()
+	defer func() {
+		if err := logger.Log.Sync(); err != nil {
+			logger.Log.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
 	// Log the agent start information.
 	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",
-		cfg.PollInterval, cfg.ReportInterval, cfg.Host, cfg.EnableGzip)
+		cfg.Agent.PollInterval, cfg.Agent.ReportInterval, cfg.Connection.Host, cfg.Agent.EnableGzip)
 
 	client := resty.New() // Initialize HTTP client.
 
 	a := agent.NewAgent(client, cfg) // Create a new agent instance.
-	a.Run()                          // Start the agent to collect and report metrics.
+
+	// Start the agent to collect and report metrics.
+	if err := a.Run(); err != nil {
+		return fmt.Errorf("failed to run agent: %w", err)
+	}
 
 	return nil
 }

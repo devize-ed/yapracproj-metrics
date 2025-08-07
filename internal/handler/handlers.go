@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -9,17 +9,47 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
+	repository "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/db"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
-	"go.uber.org/zap"
 )
 
-// Repository defines the storage contract used by handler and mem-storage.
 type Repository interface {
-	SetGauge(name string, value float64)
-	GetGauge(name string) (float64, bool)
-	AddCounter(name string, delta int64)
-	GetCounter(name string) (int64, bool)
-	ListAll() map[string]string
+	// SetGauge sets a gauge metric with the given name and value.
+	SetGauge(ctx context.Context, name string, value *float64) error
+	// GetGauge retrieves the value of a gauge metric by its name.
+	GetGauge(ctx context.Context, name string) (*float64, error)
+	// AddCounter increments a counter metric by the given delta.
+	AddCounter(ctx context.Context, name string, delta *int64) error
+	// GetCounter retrieves the value of a counter metric by its name.
+	GetCounter(ctx context.Context, name string) (*int64, error)
+	// GetAll returns all available metrics
+	GetAll(ctx context.Context) (map[string]string, error)
+	// SaveBatch saves a batch of metrics to the repository.
+	SaveBatch(ctx context.Context, batch []models.Metrics) error
+	// Ping checks the connection to the repository.
+	Ping(ctx context.Context) error
+	// Close closes the repository.
+	Close() error
+}
+
+func NewRepository(ctx context.Context, config repository.RepositoryConfig) Repository {
+	if config.DBConfig.DatabaseDSN != "" {
+		logger.Log.Info("Using database storage")
+		db, err := db.NewDB(ctx, &config.DBConfig)
+		if err != nil {
+			logger.Log.Errorf("failed to create repository: %v", err)
+		}
+		return db
+	} else if config.FSConfig.FPath != "" {
+		logger.Log.Info("Using file storage")
+		return fstorage.NewFileSaver(ctx, &config.FSConfig, mstorage.NewMemStorage())
+	} else {
+		logger.Log.Info("Using in-memory storage")
+		return mstorage.NewMemStorage()
+	}
 }
 
 // Handler wraps the storage.
@@ -52,7 +82,11 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect counter value", http.StatusBadRequest)
 				return
 			}
-			h.storage.AddCounter(metricName, val)
+			if err := h.storage.AddCounter(r.Context(), metricName, &val); err != nil {
+				logger.Log.Error("Failed to add counter:", err)
+				http.Error(w, "Failed to add counter", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Counter %s increased by %d\n", metricName, val)
 
 		case models.Gauge:
@@ -63,7 +97,11 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				http.Error(w, "Incorrect gauge value", http.StatusBadRequest)
 				return
 			}
-			h.storage.SetGauge(metricName, val)
+			if err := h.storage.SetGauge(r.Context(), metricName, &val); err != nil {
+				logger.Log.Error("Failed to set gauge:", err)
+				http.Error(w, "Failed to set gauge", http.StatusInternalServerError)
+				return
+			}
 			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, val)
 
 		default:
@@ -87,19 +125,15 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 		metricType := chi.URLParam(r, "metricType")
 
 		// Initialize variables to find and convert the metric value
-		var (
-			val []byte
-			ok  bool
-		)
+		var val []byte
 
 		// Handle different metric types, if unknown -> response as http.StatusBadRequest.
 		switch metricType {
 		case models.Counter:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			var got int64
-			got, ok = h.storage.GetCounter(metricName)
-			if ok {
-				val = []byte(strconv.FormatInt(got, 10))
+			got, err := h.storage.GetCounter(r.Context(), metricName)
+			if err == nil {
+				val = []byte(strconv.FormatInt(*got, 10))
 			} else {
 				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
@@ -107,10 +141,9 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			}
 		case models.Gauge:
 			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			var got float64
-			got, ok = h.storage.GetGauge(metricName)
-			if ok {
-				val = []byte(strconv.FormatFloat(got, 'f', -1, 64))
+			got, err := h.storage.GetGauge(r.Context(), metricName)
+			if err == nil {
+				val = []byte(strconv.FormatFloat(*got, 'f', -1, 64))
 			} else {
 				logger.Log.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
@@ -126,7 +159,9 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 
 		// Write response
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(val)
+		if _, err := w.Write(val); err != nil {
+			logger.Log.Debug("Failed to write response:", err)
+		}
 	}
 }
 
@@ -134,7 +169,12 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get the map with all the metrics from the storage.
-		metrics := h.storage.ListAll()
+		metrics, err := h.storage.GetAll(r.Context())
+		if err != nil {
+			logger.Log.Error("Failed to get all metrics:", err)
+			http.Error(w, "Failed to get all metrics", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// Sort the keys to ensure consistent order.
@@ -145,127 +185,9 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 		sort.Strings(keys)
 		// Write the metrics to the response.
 		for _, k := range keys {
-			fmt.Fprintf(w, "%s = %s\n", k, metrics[k])
-		}
-	}
-}
-
-// UpdateMetricJSONHandler handles the update of a metric based on JSON request body.
-func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		// Decode request body into model struct.
-		logger.Log.Debug("Decoding request JSON body")
-		body := &models.Metrics{}
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(body); err != nil {
-			logger.Log.Debug("Cannot decode request JSON body", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
-
-		// Get parameters.
-		metricName := body.ID
-		metricType := body.MType
-		// Handle different metric types, if unknown -> response as http.StatusBadRequest.
-		switch metricType {
-		case models.Counter:
-			var metricValue int64
-			if body.Delta != nil {
-				metricValue = *body.Delta
-			} else {
-				http.Error(w, "empty counter value", http.StatusNotFound)
-				return
+			if _, err := fmt.Fprintf(w, "%s = %s\n", k, metrics[k]); err != nil {
+				logger.Log.Debug("Failed to write metric:", err)
 			}
-			h.storage.AddCounter(metricName, metricValue)
-			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
-
-		case models.Gauge:
-			var metricValue float64
-			if body.Value != nil {
-				metricValue = *body.Value
-			} else {
-				http.Error(w, "empty gauge value", http.StatusNotFound)
-				return
-			}
-			h.storage.SetGauge(metricName, metricValue)
-			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
-
-		default:
-			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Debug("Request invalid metric type: ", metricType)
-			http.Error(w, "Invalid metric type", http.StatusBadRequest)
-			return
 		}
-
-		// Write response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}
-
-}
-
-// GetMetricJSONHandler handles the retrieval of a metric based on JSON request body.
-func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Decode request body into model struct.
-		logger.Log.Debug("Decoding request JSON body")
-		body := &models.Metrics{}
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(body); err != nil {
-			logger.Log.Debug("Cannot decode request JSON body:", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
-
-		// Get parameters.
-		metricName := body.ID
-		metricType := body.MType
-
-		// Handle different metric types, if unknown -> response as http.StatusBadRequest.
-		switch metricType {
-		case models.Counter:
-			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			got, ok := h.storage.GetCounter(metricName)
-			if ok {
-				body.Delta = &got
-			} else {
-				logger.Log.Error("Requested metric not found: ", metricName)
-				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
-				http.Error(w, "metric not found", http.StatusNotFound)
-				return
-			}
-		case models.Gauge:
-			// Get the metric value from the storage, if not found -> response as http.StatusNotFound.
-			got, ok := h.storage.GetGauge(metricName)
-			if ok {
-				body.Value = &got
-			} else {
-				logger.Log.Error("Requested metric not found: ", metricName)
-				logger.Log.Debugln("Available metrics: ", h.storage.ListAll())
-				http.Error(w, "metric not found", http.StatusNotFound)
-				return
-			}
-
-		default:
-			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Error("Request invalid metric type: ", metricType)
-			http.Error(w, "Invalid metric type", http.StatusBadRequest)
-			return
-		}
-
-		// Write response.
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(body); err != nil {
-			logger.Log.Debug("Cannot encode response JSON:", zap.Error(err))
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
 	}
 }

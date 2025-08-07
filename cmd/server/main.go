@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,7 +10,6 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	st "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
@@ -31,43 +29,34 @@ func run() error {
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer logger.Log.Sync()
+	defer func() {
+		if err := logger.Log.Sync(); err != nil {
+			logger.Log.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
-	logger.Log.Infof("Server config: interval=%d fpath=%s restore=%v host=%s",
-		cfg.StoreInterval, cfg.FPath, cfg.Restore, cfg.Host)
-
-	// create a new in-memory storage
-	ms, err := initStorage(cfg)
-	if err != nil {
-		return err
+	// Initialize the repository based on the configuration
+	repository := handler.NewRepository(context.Background(), cfg.Repository)
+	if err := repository.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to initialize repository: %w", err)
 	}
+	defer func() {
+		if err := repository.Close(); err != nil {
+			logger.Log.Errorf("failed to close repository: %v", err)
+		}
+	}()
 
 	// create a context that listens for OS signals to shut down the server
-	ctx, stop := signal.NotifyContext(context.Background(),
-		os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// start the interval saver to periodically save metrics to the file
-	ms.IntervalSaver(ctx, cfg.StoreInterval, cfg.FPath)
-
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(ms)
-	srv := server.NewServer(cfg, ms, h)
+	h := handler.NewHandler(repository)
+	srv := server.NewServer(cfg, h)
 
 	if err = srv.Serve(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)
 	}
 
 	return nil
-}
-
-func initStorage(cfg config.ServerConfig) (*st.MemStorage, error) {
-	ms := st.NewMemStorage(cfg.StoreInterval, cfg.FPath)
-
-	if cfg.Restore {
-		if err := ms.Load(cfg.FPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("load metrics: %w", err)
-		}
-	}
-	return ms, nil
 }

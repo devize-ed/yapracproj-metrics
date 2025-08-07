@@ -6,25 +6,32 @@ import (
 	"strings"
 
 	"github.com/caarlos0/env"
+	agent "github.com/devize-ed/yapracproj-metrics.git/internal/agent/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 )
 
 // ServerConfig holds the configuration for the server.
 type ServerConfig struct {
-	Host          string `env:"ADDRESS"`
-	StoreInterval int    `env:"STORE_INTERVAL"`
-	FPath         string `env:"FILE_STORAGE_PATH"`
-	Restore       bool   `env:"RESTORE"`
-	LogLevel      string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
+	Connection ServerConn
+	Repository repository.RepositoryConfig
+	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
+}
+
+// ServerConn holds server address configuration.
+type ServerConn struct {
+	Host string `env:"ADDRESS"` // Address of the HTTP server.
 }
 
 // AgentConfig holds the configuration for the agent.
 type AgentConfig struct {
-	Host           string `env:"ADDRESS"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-	LogLevel       string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
-	EnableGzip     bool   `env:"ENABLE_GZIP"`                  // Enable gzip compression for requests.
-	EnableTestGet  bool   `env:"ENABLE_GET_METRICS"`           // Enable test retrieval of metrics from the server.
+	Connection AgentConn
+	Agent      agent.AgentConfig
+	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
+}
+
+// AgentConn holds agent connection configuration.
+type AgentConn struct {
+	Host string `env:"ADDRESS"` // Address of the HTTP server.
 }
 
 // GetServerConfig parses environment variables and command-line flags, then returns the server configuration.
@@ -32,10 +39,11 @@ func GetServerConfig() (ServerConfig, error) {
 	cfg := ServerConfig{}
 
 	// Set CLI flags.
-	flag.StringVar(&cfg.Host, "a", "localhost:8080", "address of HTTP server")
-	flag.IntVar(&cfg.StoreInterval, "i", 300, "store interval in seconds")
-	flag.StringVar(&cfg.FPath, "f", "./metrics_storage.json", "file path for storing metrics")
-	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file")
+	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address of HTTP server")
+	flag.IntVar(&cfg.Repository.FSConfig.StoreInterval, "i", 300, "store interval in seconds")
+	flag.StringVar(&cfg.Repository.FSConfig.FPath, "f", "", "file path for storing metrics")
+	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
+	flag.BoolVar(&cfg.Repository.FSConfig.Restore, "r", false, "restore metrics from file")
 
 	// Parse flags.
 	flag.Parse()
@@ -44,13 +52,22 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return cfg, err
 	}
-
-	// Validate the configuration.
-	if cfg.StoreInterval < 0 {
-		return cfg, fmt.Errorf("STORE_INTERVAL must be non-negative (got %d)", cfg.StoreInterval)
+	if err := env.Parse(&cfg.Connection); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Repository.FSConfig); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Repository.DBConfig); err != nil {
+		return cfg, err
 	}
 
-	cfg.Host = strings.TrimPrefix(cfg.Host, "http://")
+	// Validate the configuration.
+	if cfg.Repository.FSConfig.StoreInterval < 0 {
+		return cfg, fmt.Errorf("STORE_INTERVAL must be non-negative (got %d)", cfg.Repository.FSConfig.StoreInterval)
+	}
+
+	cfg.Connection.Host = strings.TrimPrefix(cfg.Connection.Host, "http://")
 
 	return cfg, nil
 }
@@ -59,26 +76,32 @@ func GetServerConfig() (ServerConfig, error) {
 func GetAgentConfig() (AgentConfig, error) {
 	cfg := AgentConfig{}
 
-	flag.StringVar(&cfg.Host, "a", ":8080", "address and port of the server")
-	flag.IntVar(&cfg.ReportInterval, "r", 10, "reporting interval in seconds")
-	flag.IntVar(&cfg.PollInterval, "p", 2, "polling interval in seconds")
-	flag.BoolVar(&cfg.EnableGzip, "c", true, "enable gzip compression for requests")
-	flag.BoolVar(&cfg.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
+	flag.StringVar(&cfg.Connection.Host, "a", ":8080", "address and port of the server")
+	flag.IntVar(&cfg.Agent.ReportInterval, "r", 10, "reporting interval in seconds")
+	flag.IntVar(&cfg.Agent.PollInterval, "p", 2, "polling interval in seconds")
+	flag.BoolVar(&cfg.Agent.EnableGzip, "c", true, "enable gzip compression for requests")
+	flag.BoolVar(&cfg.Agent.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
 
 	// Parse flags.
 	flag.Parse()
 
-	// Environment variables can override the flags.
+	// Override with environment variables if they exist.
 	if err := env.Parse(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Connection); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Agent); err != nil {
 		return cfg, err
 	}
 
 	// Validate the configuration.
-	if cfg.PollInterval < 0 {
-		return cfg, fmt.Errorf("POLL_INTERVAL must be non-negative (got %d)", cfg.PollInterval)
+	if cfg.Agent.PollInterval < 0 {
+		return cfg, fmt.Errorf("POLL_INTERVAL must be non-negative (got %d)", cfg.Agent.PollInterval)
 	}
-	if cfg.ReportInterval < 0 {
-		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.ReportInterval)
+	if cfg.Agent.ReportInterval < 0 {
+		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.Agent.ReportInterval)
 	}
 
 	return cfg, nil

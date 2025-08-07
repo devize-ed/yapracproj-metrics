@@ -12,41 +12,35 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 )
 
-// Repository matches the storage contract used by handler and mem‑storage.
-type Repository interface {
-	Save(path string) error
-}
-
 // Server wraps an *http.Server and adds storage and configuration.
 type Server struct {
 	*http.Server
-	storage Repository
-	cfg     config.ServerConfig
+	cfg config.ServerConfig
 }
 
 // NewServer constructs the HTTP server using config and storage.
-func NewServer(cfg config.ServerConfig, storage Repository, h *handler.Handler) *Server {
+func NewServer(cfg config.ServerConfig, h *handler.Handler) *Server {
 	s := &Server{
-		storage: storage,
-		cfg:     cfg,
+		cfg: cfg,
 	}
 	s.Server = &http.Server{
-		Addr:    cfg.Host,
+		Addr:    cfg.Connection.Host,
 		Handler: h.NewRouter(),
 	}
 	return s
 }
 
 // Shutdown passes through to the embedded http.Server.
-func (s *Server) Shutdown(ctx context.Context) error {
-	return s.Server.Shutdown(ctx)
+func (s *Server) shutdown(ctx context.Context) error {
+	return s.Shutdown(ctx)
 }
 
 // Serve starts the HTTP server, blocks until ctx is cancelled, provide shutdown and save metrics.
 func (s *Server) Serve(ctx context.Context) error {
 	// Start the HTTP server in a goroutine.
 	go func() {
-		logger.Log.Infof("HTTP server listening on %s", s.cfg.Host)
+		// Setart the server and listen for incoming requests.
+		logger.Log.Infof("HTTP server listening on %s", s.cfg.Connection.Host)
 		if err := s.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
 			logger.Log.Errorf("listen error: %v", err)
@@ -62,14 +56,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := s.Shutdown(shutCtx); err != nil {
+	if err := s.shutdown(shutCtx); err != nil {
 		return fmt.Errorf("error shutting down the server: %w", err)
-	}
-
-	// Save metrics before the exit.
-	logger.Log.Debug("Saving before exit ...")
-	if err := s.storage.Save(s.cfg.FPath); err != nil {
-		return fmt.Errorf("failed to save on exit: %w", err)
 	}
 	return nil
 }

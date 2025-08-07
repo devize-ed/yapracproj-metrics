@@ -1,21 +1,32 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
-	storage "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 )
 
-func testMemoryStorage(ms *storage.MemStorage) {
-	ms.AddCounter("testCounter", 5)
-	ms.SetGauge("testGauge1", 10.5)
-	ms.SetGauge("testGauge2", 10.5)
+func testMemoryStorage(t *testing.T, ms *mstorage.MemStorage) {
+	ctx := context.Background()
+	delta := int64(5)
+	if err := ms.AddCounter(ctx, "testCounter", &delta); err != nil {
+		t.Fatalf("Failed to add counter: %v", err)
+	}
+	g1 := 10.5
+	if err := ms.SetGauge(ctx, "testGauge1", &g1); err != nil {
+		t.Fatalf("Failed to set gauge: %v", err)
+	}
+	g2 := 1.5
+	if err := ms.SetGauge(ctx, "testGauge2", &g2); err != nil {
+		t.Fatalf("Failed to set gauge: %v", err)
+	}
 }
 
 func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp *resty.Response) {
@@ -32,7 +43,7 @@ func TestUpdateHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
 
 	r := chi.NewRouter()
@@ -71,9 +82,9 @@ func TestListAllHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
-	testMemoryStorage(ms)
+	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
 	r.Get("/", h.ListMetricsHandler())
@@ -85,7 +96,7 @@ func TestListAllHandler(t *testing.T) {
 		expectedCode int
 		expectedBody string
 	}{
-		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.5\ntestGauge2 = 10.5"},
+		{"/", http.StatusOK, "testCounter = 5\ntestGauge1 = 10.5\ntestGauge2 = 1.5"},
 	}
 
 	for _, tt := range tests {
@@ -101,9 +112,9 @@ func TestGetMetricHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	ms := storage.NewMemStorage(0, "")
+	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms)
-	testMemoryStorage(ms)
+	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
 	r.Get("/value/{metricType}/{metricName}", h.GetMetricHandler())
@@ -128,128 +139,6 @@ func TestGetMetricHandler(t *testing.T) {
 			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
 			assert.Equal(t, tt.expectedBody, resp.String(), "Response body didn't match expected")
 		})
-	}
-}
 
-func TestUpdateJsonHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
-
-	endpoint := "/update"
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms)
-
-	r := chi.NewRouter()
-	r.Post(endpoint, h.UpdateMetricJSONHandler())
-
-	srv := httptest.NewServer(r)
-	defer srv.Close()
-
-	var tests = []struct {
-		name                string
-		expectedContentType string
-		expectedCode        int
-		body                string
-	}{
-		{
-			name:                "update_counter",
-			expectedContentType: "application/json",
-			expectedCode:        http.StatusOK,
-			body:                `{"id": "testCounter","type": "counter","delta": 5}`,
-		},
-		{
-			name:                "update_gauge",
-			expectedContentType: "application/json",
-			expectedCode:        http.StatusOK,
-			body:                `{"id": "testGauge1","type": "gauge","value": 123123}`,
-		},
-		{
-			name:                "empty_value",
-			expectedContentType: "text/plain; charset=utf-8",
-			expectedCode:        http.StatusNotFound,
-			body:                `{"id": "testGauge1","type": "gauge","value": null}`,
-		},
-		{
-			name:                "incorrect_metric_type",
-			expectedContentType: "text/plain; charset=utf-8",
-			expectedCode:        http.StatusBadRequest,
-			body:                `{"id": "anyValue","type": "anyType","value": 123123}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := resty.New().R()
-			req.Method = http.MethodPost
-			req.URL = srv.URL + endpoint
-
-			req.SetHeader("Content-Type", "application/json")
-			req.SetBody(tt.body)
-
-			resp, err := req.Send()
-			assert.NoError(t, err, "error making HTTP request")
-
-			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
-			assert.Equal(t, tt.expectedContentType, resp.Header().Get("Content-Type"), "Response content type didn't match expected")
-		})
-	}
-}
-
-func TestHandler_GetMetricJsonHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
-
-	endpoint := "/value"
-	ms := storage.NewMemStorage(0, "")
-	h := NewHandler(ms)
-	testMemoryStorage(ms)
-
-	r := chi.NewRouter()
-	r.Post(endpoint, h.GetMetricJSONHandler())
-
-	srv := httptest.NewServer(r)
-	defer srv.Close()
-
-	var tests = []struct {
-		name                string
-		expectedContentType string
-		expectedCode        int
-		body                string
-		expectedBody        string
-	}{
-		{
-			name:                "get_counter",
-			expectedContentType: "application/json",
-			expectedCode:        http.StatusOK,
-			body:                `{"id": "testCounter","type": "counter"}`,
-			expectedBody:        `{"id": "testCounter","type": "counter","delta": 5}`,
-		},
-		{
-			name:                "get_gauge",
-			expectedContentType: "application/json",
-			expectedCode:        http.StatusOK,
-			body:                `{"id": "testGauge1","type": "gauge"}`,
-			expectedBody:        `{"id": "testGauge1","type": "gauge","value": 10.5}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := resty.New().R()
-			req.Method = http.MethodPost
-			req.URL = srv.URL + endpoint
-
-			req.SetHeader("Content-Type", "application/json")
-			req.SetBody(tt.body)
-
-			resp, err := req.Send()
-			assert.NoError(t, err, "error making HTTP request")
-
-			assert.Equal(t, tt.expectedCode, resp.StatusCode(), "Response code didn't match expected")
-			assert.Equal(t, tt.expectedContentType, resp.Header().Get("Content-Type"), "Response content type didn't match expected")
-			if tt.expectedBody != "" {
-				assert.JSONEq(t, tt.expectedBody, string(resp.Body()), "Response body didn't match expected")
-			}
-		})
 	}
 }

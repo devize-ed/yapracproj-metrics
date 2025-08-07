@@ -1,0 +1,33 @@
+services:
+  metrics-postgres:
+    container_name: metrics-postgres
+    image: postgres:17.2
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: metrics
+      POSTGRES_PASSWORD: "12311"
+      PGDATA: "/var/lib/postgresql/data"
+    volumes:
+      - "./db/init:/docker-entrypoint-initdb.d"
+      - "metrics-postgres:/var/lib/postgresql/data"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d metrics"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    networks:
+      - metrics-net
+    restart: always
+
+volumes:
+  metrics-postgres:
+
+networks:
+  metrics-net:
+    driver: bridge
+
+
+
