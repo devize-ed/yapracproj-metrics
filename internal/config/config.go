@@ -8,12 +8,14 @@ import (
 	"github.com/caarlos0/env"
 	agent "github.com/devize-ed/yapracproj-metrics.git/internal/agent/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
+	sign "github.com/devize-ed/yapracproj-metrics.git/internal/sign/config"
 )
 
 // ServerConfig holds the configuration for the server.
 type ServerConfig struct {
 	Connection ServerConn
 	Repository repository.RepositoryConfig
+	Sign       sign.SignConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
 }
 
@@ -26,6 +28,7 @@ type ServerConn struct {
 type AgentConfig struct {
 	Connection AgentConn
 	Agent      agent.AgentConfig
+	Sign       sign.SignConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
 }
 
@@ -44,6 +47,7 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.Repository.FSConfig.FPath, "f", "", "file path for storing metrics")
 	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
 	flag.BoolVar(&cfg.Repository.FSConfig.Restore, "r", false, "restore metrics from file")
+	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
 
 	// Parse flags.
 	flag.Parse()
@@ -61,6 +65,9 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := env.Parse(&cfg.Repository.DBConfig); err != nil {
 		return cfg, err
 	}
+	if err := env.Parse(&cfg.Sign); err != nil {
+		return cfg, err
+	}
 
 	// Validate the configuration.
 	if cfg.Repository.FSConfig.StoreInterval < 0 {
@@ -76,11 +83,12 @@ func GetServerConfig() (ServerConfig, error) {
 func GetAgentConfig() (AgentConfig, error) {
 	cfg := AgentConfig{}
 
-	flag.StringVar(&cfg.Connection.Host, "a", ":8080", "address and port of the server")
+	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address and port of the server")
 	flag.IntVar(&cfg.Agent.ReportInterval, "r", 10, "reporting interval in seconds")
 	flag.IntVar(&cfg.Agent.PollInterval, "p", 2, "polling interval in seconds")
 	flag.BoolVar(&cfg.Agent.EnableGzip, "c", true, "enable gzip compression for requests")
 	flag.BoolVar(&cfg.Agent.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
+	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
 
 	// Parse flags.
 	flag.Parse()
@@ -95,6 +103,9 @@ func GetAgentConfig() (AgentConfig, error) {
 	if err := env.Parse(&cfg.Agent); err != nil {
 		return cfg, err
 	}
+	if err := env.Parse(&cfg.Sign); err != nil {
+		return cfg, err
+	}
 
 	// Validate the configuration.
 	if cfg.Agent.PollInterval < 0 {
@@ -103,6 +114,5 @@ func GetAgentConfig() (AgentConfig, error) {
 	if cfg.Agent.ReportInterval < 0 {
 		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.Agent.ReportInterval)
 	}
-
 	return cfg, nil
 }
