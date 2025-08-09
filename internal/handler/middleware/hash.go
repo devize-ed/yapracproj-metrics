@@ -50,8 +50,7 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 			hash := r.Header.Get(sign.HashHeader)
 			if hash == "" {
 				// If the hash header is empty, skip the hash verification.
-				logger.Log.Debugf("hash header is empty, %s", r.Header)
-				http.Error(w, "missing hash header", http.StatusBadRequest)
+				next.ServeHTTP(w, r)
 				return
 			}
 
