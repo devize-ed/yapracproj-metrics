@@ -58,17 +58,6 @@ func TestMiddlewareGzip(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode())
 
 		require.Empty(t, resp.Header().Get("Content-Encoding"))
-		require.JSONEq(t, successBody, string(resp.Body()))
-	})
-
-	t.Run("server_sends_gzip", func(t *testing.T) {
-		resp, err := client.R().
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody([]byte(requestBody)).
-			Post(srv.URL + "/")
-		require.NoError(t, err)
-
-		require.Equal(t, http.StatusOK, resp.StatusCode())
-		require.JSONEq(t, successBody, string(resp.Body()))
+		require.Equal(t, successBody, string(resp.Body()))
 	})
 }

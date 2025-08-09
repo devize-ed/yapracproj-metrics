@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"bytes"
-	"compress/gzip"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/sign"
 	"github.com/go-chi/chi"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/require"
@@ -21,54 +20,66 @@ func TestHashMiddleware(t *testing.T) {
 		"id":"LastGC",
 		"type":"gauge"
 	}`
-	successBody := `{
-		"id":"LastGC",
-		"type":"gauge",
-		"value":1744184459
-	}`
+
+	key := "test_key"
 
 	successHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(successBody))
+		_, _ = w.Write([]byte("success"))
 	})
 
 	router := chi.NewRouter()
-	router.Use(MiddlewareGzip)
+	router.Use(HashMiddleware(key))
 	router.Post("/", successHandler)
 
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 	client := resty.New()
 
-	t.Run("client_sends_gzip", func(t *testing.T) {
-		var buf bytes.Buffer
-		zw := gzip.NewWriter(&buf)
-		_, err := zw.Write([]byte(requestBody))
-		require.NoError(t, err)
-		require.NoError(t, zw.Close())
+	tests := []struct {
+		name       string
+		hash       string
+		key        string
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "request_with_hash",
+			hash:       sign.Hash([]byte(requestBody), key),
+			key:        key,
+			wantStatus: http.StatusOK,
+			wantBody:   "success",
+		},
+		{name: "missing_hash",
+			hash:       "",
+			key:        key,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "missing hash header\n",
+		},
+		{name: "invalid_hash",
+			hash:       "1d23d23d231",
+			key:        key,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Hash verification failed\n",
+		},
+		{name: "empty_key",
+			hash:       sign.Hash([]byte(requestBody), ""),
+			key:        "",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Hash verification failed\n",
+		},
+	}
 
-		resp, err := client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
-			SetHeader("Accept-Encoding", "").
-			SetBody(buf.Bytes()).
-			Post(srv.URL + "/")
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode())
-
-		require.Empty(t, resp.Header().Get("Content-Encoding"))
-		require.JSONEq(t, successBody, string(resp.Body()))
-	})
-
-	t.Run("server_sends_gzip", func(t *testing.T) {
-		resp, err := client.R().
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody([]byte(requestBody)).
-			Post(srv.URL + "/")
-		require.NoError(t, err)
-
-		require.Equal(t, http.StatusOK, resp.StatusCode())
-		require.JSONEq(t, successBody, string(resp.Body()))
-	})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := client.R().
+				SetHeader("Content-Type", "application/json").
+				SetHeader(sign.HashHeader, test.hash).
+				SetBody([]byte(requestBody)).
+				Post(srv.URL + "/")
+			require.NoError(t, err)
+			require.Equal(t, test.wantStatus, resp.StatusCode())
+			require.Equal(t, test.wantBody, string(resp.Body()))
+		})
+	}
 }
