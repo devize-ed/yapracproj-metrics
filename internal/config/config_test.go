@@ -11,6 +11,7 @@ import (
 	repo "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	db "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/config"
 	fs "github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage/config"
+	sign "github.com/devize-ed/yapracproj-metrics.git/internal/sign/config"
 )
 
 func TestGetServerConfig(t *testing.T) {
@@ -30,6 +31,7 @@ func TestGetServerConfig(t *testing.T) {
 				"RESTORE":           "false",
 				"DATABASE_DSN":      "user:password@/dbname",
 				"LOG_LEVEL":         "error",
+				"KEY":               "test_key",
 			},
 			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=true"},
 			expectedConfig: ServerConfig{
@@ -44,6 +46,9 @@ func TestGetServerConfig(t *testing.T) {
 						DatabaseDSN: "user:password@/dbname",
 					},
 				},
+				Sign: sign.SignConfig{
+					Key: "test_key",
+				},
 				LogLevel: "error",
 			},
 			wantErr: false,
@@ -51,7 +56,7 @@ func TestGetServerConfig(t *testing.T) {
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-d=user:password@/dbname", "-r=false"},
+			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-d=user:password@/dbname", "-r=false", "-k=test2_key"},
 			expectedConfig: ServerConfig{
 				Connection: ServerConn{Host: ":7070"},
 				Repository: repo.RepositoryConfig{
@@ -64,7 +69,10 @@ func TestGetServerConfig(t *testing.T) {
 						DatabaseDSN: "user:password@/dbname",
 					},
 				},
-				LogLevel: "debug",
+				Sign: sign.SignConfig{
+					Key: "test2_key",
+				},
+				LogLevel: "",
 			},
 			wantErr: false,
 		},
@@ -84,7 +92,10 @@ func TestGetServerConfig(t *testing.T) {
 						DatabaseDSN: "",
 					},
 				},
-				LogLevel: "debug",
+				Sign: sign.SignConfig{
+					Key: "",
+				},
+				LogLevel: "",
 			},
 			wantErr: false,
 		},
@@ -109,7 +120,10 @@ func TestGetServerConfig(t *testing.T) {
 						DatabaseDSN: "user:password@/dbname",
 					},
 				},
-				LogLevel: "error",
+				Sign: sign.SignConfig{
+					Key: "",
+				},
+				LogLevel: "",
 			},
 			wantErr: true,
 		},
@@ -117,6 +131,13 @@ func TestGetServerConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
+
+			for _, k := range []string{
+				"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN",
+				"LOG_LEVEL", "KEY",
+			} {
+				t.Setenv(k, "")
+			}
 
 			for key, val := range tc.envVars {
 				t.Setenv(key, val)
@@ -152,6 +173,7 @@ func TestGetAgentConfig(t *testing.T) {
 				"LOG_LEVEL":          "error",
 				"ENABLE_GZIP":        "true",
 				"ENABLE_GET_METRICS": "true",
+				"KEY":                "test_key",
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
@@ -162,6 +184,9 @@ func TestGetAgentConfig(t *testing.T) {
 					EnableGzip:     true,
 					EnableTestGet:  true,
 				},
+				Sign: sign.SignConfig{
+					Key: "test_key",
+				},
 				LogLevel: "error",
 			},
 			wantErr: false,
@@ -169,7 +194,7 @@ func TestGetAgentConfig(t *testing.T) {
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false"},
+			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false", "-k=test2_key"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -178,7 +203,10 @@ func TestGetAgentConfig(t *testing.T) {
 					EnableGzip:     false,
 					EnableTestGet:  false,
 				},
-				LogLevel: "debug",
+				Sign: sign.SignConfig{
+					Key: "test2_key",
+				},
+				LogLevel: "",
 			},
 			wantErr: false,
 		},
@@ -187,14 +215,17 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: ":8080"},
+				Connection: AgentConn{Host: "localhost:8080"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 10,
 					PollInterval:   2,
 					EnableGzip:     true,
 					EnableTestGet:  false,
 				},
-				LogLevel: "debug",
+				Sign: sign.SignConfig{
+					Key: "",
+				},
+				LogLevel: "",
 			},
 			wantErr: false,
 		},
@@ -215,7 +246,10 @@ func TestGetAgentConfig(t *testing.T) {
 					EnableGzip:     false,
 					EnableTestGet:  false,
 				},
-				LogLevel: "error",
+				Sign: sign.SignConfig{
+					Key: "",
+				},
+				LogLevel: "",
 			},
 			wantErr: true,
 		},
@@ -224,6 +258,13 @@ func TestGetAgentConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
+
+			for _, k := range []string{
+				"ADDRESS", "REPORT_INTERVAL", "POLL_INTERVAL", "LOG_LEVEL",
+				"ENABLE_GZIP", "ENABLE_GET_METRICS",
+			} {
+				t.Setenv(k, "")
+			}
 
 			for key, val := range tc.envVars {
 				t.Setenv(key, val)
