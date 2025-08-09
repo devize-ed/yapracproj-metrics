@@ -51,7 +51,7 @@ func run() error {
 	defer stop()
 
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(repository)
+	h := handler.NewHandler(repository, cfg.Sign.Key)
 	srv := server.NewServer(cfg, h)
 
 	if err = srv.Serve(ctx); err != nil {

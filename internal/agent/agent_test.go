@@ -8,38 +8,41 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSendMetric(t *testing.T) {
+func TestSendMetricsBatch(t *testing.T) {
 	_ = logger.Initialize("debug")
 	defer logger.Log.Sync()
 
-	type args struct {
-		metric string
-		value  Gauge
-	}
 	tests := []struct {
 		name     string
-		args     args
+		metrics  []models.Metrics
 		wantErr  bool
 		wantCode int
 	}{
 		{
-			name: "send_metric",
-			args: args{
-				metric: "testMetric",
-				value:  111.11,
+			name: "send_metrics_batch",
+			metrics: []models.Metrics{
+				{
+					ID:    "testMetric",
+					MType: "gauge",
+					Value: func() *float64 { v := 111.11; return &v }(),
+				},
 			},
 			wantErr:  false,
 			wantCode: http.StatusOK,
 		},
 	}
 
+	var gotStatusCode int
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		gotStatusCode = http.StatusOK
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer srv.Close()
@@ -53,11 +56,13 @@ func TestSendMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := SendMetric(agent, tt.args.metric, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("SendMetric() error = %v, wantErr %v", err, tt.wantErr)
+			gotStatusCode = 0
+			err := SendMetricsBatch(agent, tt.metrics)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SendMetricsBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			assert.Equal(t, tt.wantCode, gotStatusCode, "Expected status code to be %d", tt.wantCode)
 		})
-		assert.Equal(t, tt.wantCode, http.StatusOK, "Expected status code to be %d", tt.wantCode)
 	}
 }
 

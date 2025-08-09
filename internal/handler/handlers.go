@@ -55,12 +55,14 @@ func NewRepository(ctx context.Context, config repository.RepositoryConfig) Repo
 // Handler wraps the storage.
 type Handler struct {
 	storage Repository
+	hashKey string
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r Repository) *Handler {
+func NewHandler(r Repository, key string) *Handler {
 	return &Handler{
 		storage: r,
+		hashKey: key,
 	}
 }
 

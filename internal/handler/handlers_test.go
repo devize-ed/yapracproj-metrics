@@ -44,7 +44,7 @@ func TestUpdateHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "")
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -83,7 +83,7 @@ func TestListAllHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "")
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -113,7 +113,7 @@ func TestGetMetricHandler(t *testing.T) {
 	defer logger.Log.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "")
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
