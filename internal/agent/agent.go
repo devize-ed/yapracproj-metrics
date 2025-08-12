@@ -50,43 +50,47 @@ func (a *Agent) Run() error {
 			a.storage.CollectMetrics()
 		case <-reportTicker.C: // Send metrics at the reporting interval.
 			logger.Log.Debug("Reporting metrics...")
+			if err := SendMetricsBatch(a, metrics); err != nil {
+				logger.Log.Error("error sending batch metrics: ", err)
+			}
 
-			// Check whether "test‑get" mode is enabled.
-			if !a.config.Agent.EnableTestGet {
-				// Send metrics as a batch to the server.
-				var metrics = []models.Metrics{}
-				for name, val := range a.storage.Gauges {
-					floatVal := float64(val)
-					metrics = append(metrics, models.Metrics{
-						ID:    name,
-						MType: models.Gauge,
-						Value: &floatVal,
-					})
-				}
-				for name, val := range a.storage.Counters {
-					intVal := int64(val)
-					metrics = append(metrics, models.Metrics{
-						ID:    name,
-						MType: models.Counter,
-						Delta: &intVal,
-					})
-				}
-				if err := SendMetricsBatch(a, metrics); err != nil {
-					logger.Log.Error("error sending batch metrics: ", err)
-				}
-			} else {
-				logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
-				// “Test‑get” mode: request metrics from the server.
-				for name, val := range a.storage.Counters {
-					if err := GetMetric(a, name, val); err != nil {
-						logger.Log.Error("error getting ", name, ": ", err)
-					}
-				}
-				for name, val := range a.storage.Gauges {
-					if err := GetMetric(a, name, val); err != nil {
-						logger.Log.Error("error getting ", name, ": ", err)
-					}
-				}
+		}
+	}
+}
+
+func (a *Agent) LoadMetrics() {
+	// Check whether "test‑get" mode is enabled.
+	if !a.config.Agent.EnableTestGet {
+		// Send metrics as a batch to the server.
+		var metrics = []models.Metrics{}
+		for name, val := range a.storage.Gauges {
+			floatVal := float64(val)
+			metrics = append(metrics, models.Metrics{
+				ID:    name,
+				MType: models.Gauge,
+				Value: &floatVal,
+			})
+		}
+		for name, val := range a.storage.Counters {
+			intVal := int64(val)
+			metrics = append(metrics, models.Metrics{
+				ID:    name,
+				MType: models.Counter,
+				Delta: &intVal,
+			})
+		}
+
+	} else {
+		logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
+		// “Test‑get” mode: request metrics from the server.
+		for name, val := range a.storage.Counters {
+			if err := GetMetric(a, name, val); err != nil {
+				logger.Log.Error("error getting ", name, ": ", err)
+			}
+		}
+		for name, val := range a.storage.Gauges {
+			if err := GetMetric(a, name, val); err != nil {
+				logger.Log.Error("error getting ", name, ": ", err)
 			}
 		}
 	}
