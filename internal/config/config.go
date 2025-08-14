@@ -114,5 +114,8 @@ func GetAgentConfig() (AgentConfig, error) {
 	if cfg.Agent.ReportInterval < 0 {
 		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.Agent.ReportInterval)
 	}
+	if cfg.Agent.RateLimit < 0 {
+		return cfg, fmt.Errorf("RATE_LIMIT must be non-negative (got %d)", cfg.Agent.RateLimit)
+	}
 	return cfg, nil
 }

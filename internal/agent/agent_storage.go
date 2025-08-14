@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"math/rand/v2"
 	"runtime"
 	"sync"
@@ -22,7 +23,7 @@ type MetricValue interface {
 
 // AgentStorage holds the metrics collected by the agent.
 type AgentStorage struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	Counters map[string]Counter
 	Gauges   map[string]Gauge
 }
@@ -36,15 +37,29 @@ func NewAgentStorage() *AgentStorage {
 }
 
 // CollectMetrics collects and store metrics.
-func (s *AgentStorage) CollectMetrics() {
+func (s *AgentStorage) CollectMetrics(ctx context.Context) {
+	var wg sync.WaitGroup
+	wg.Add(3)
+
 	logger.Log.Debug("Collecting metrics")
-	s.collectRuntimeMetrics()
-	s.collectAdditionalMetrics()
-	s.collectSystemMetrics()
+
+	go func() {
+		defer wg.Done()
+		s.collectRuntimeMetrics(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		s.collectAdditionalMetrics(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		s.collectSystemMetrics(ctx)
+	}()
+	wg.Wait()
 }
 
 // collectRuntimeMetrics collects runtime metrics and stores them in the agent storage.
-func (s *AgentStorage) collectRuntimeMetrics() {
+func (s *AgentStorage) collectRuntimeMetrics(ctx context.Context) {
 	// Read metrics from the runtime package.
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -82,7 +97,7 @@ func (s *AgentStorage) collectRuntimeMetrics() {
 }
 
 // collectAdditionalMetrics adds additional metrics to the agent storage.
-func (s *AgentStorage) collectAdditionalMetrics() {
+func (s *AgentStorage) collectAdditionalMetrics(ctx context.Context) {
 	s.mu.Lock()
 	s.Counters["PollCount"]++                       // Increment the poll count
 	s.Gauges["RandomValue"] = Gauge(rand.Float64()) // Add a random value to the metrics.
@@ -90,7 +105,7 @@ func (s *AgentStorage) collectAdditionalMetrics() {
 }
 
 // collectSystemMetrics collects system metrics and stores them in the agent storage.
-func (s *AgentStorage) collectSystemMetrics() {
+func (s *AgentStorage) collectSystemMetrics(ctx context.Context) {
 	m, err := mem.VirtualMemory()
 	if err != nil {
 		logger.Log.Error("Error collecting system metrics: ", err)

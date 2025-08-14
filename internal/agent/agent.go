@@ -3,10 +3,12 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
@@ -18,9 +20,17 @@ import (
 
 // Agent holds the HTTP client, metric storage, and configuration.
 type Agent struct {
-	client  *resty.Client
-	storage *AgentStorage
-	config  config.AgentConfig
+	client    *resty.Client
+	storage   *AgentStorage
+	config    config.AgentConfig
+	wg        sync.WaitGroup
+	jobsQueue chan batchRequest
+}
+
+type batchRequest struct {
+	name      string
+	endpoint  string
+	bodyBytes []byte
 }
 
 // NewAgent returns a new Agent that uses the given HTTP client and configuration.
@@ -32,7 +42,16 @@ func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) Run() error {
+func (a *Agent) Run(ctx context.Context) error {
+	// Get the number of workers.
+	numWorkers := a.config.Agent.RateLimit
+	// Create channels.
+	a.jobsQueue = make(chan batchRequest, 2*numWorkers)
+	defer close(a.jobsQueue)
+
+	// Create a worker pool.
+	errCh := a.createWorkerPool(numWorkers)
+
 	// Convert interval values to time.Duration.
 	timePollInterval := time.Duration(a.config.Agent.PollInterval) * time.Second
 	timeReportInterval := time.Duration(a.config.Agent.ReportInterval) * time.Second
@@ -47,57 +66,73 @@ func (a *Agent) Run() error {
 	for {
 		select {
 		case <-pollTicker.C: // Collect metrics at the polling interval.
-			a.storage.CollectMetrics()
+			a.storage.CollectMetrics(ctx)
 		case <-reportTicker.C: // Send metrics at the reporting interval.
-			logger.Log.Debug("Reporting metrics...")
-			if err := SendMetricsBatch(a, metrics); err != nil {
-				logger.Log.Error("error sending batch metrics: ", err)
+			// Check whether "test‑get" mode is enabled.
+			if !a.config.Agent.EnableTestGet {
+				// Send metrics as a batch to the server.
+				metrics := a.LoadMetrics()
+				if err := a.SendMetricsBatch(metrics); err != nil {
+					logger.Log.Error("error sending batch metrics: ", err)
+				}
+			} else {
+				logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
+				// “Test‑get” mode: request metrics from the server.
+				for name, val := range a.storage.Counters {
+					if err := GetMetric(a, name, val); err != nil {
+						logger.Log.Error("error getting ", name, ": ", err)
+					}
+				}
+				for name, val := range a.storage.Gauges {
+					if err := GetMetric(a, name, val); err != nil {
+						logger.Log.Error("error getting ", name, ": ", err)
+					}
+				}
 			}
-
+		case err := <-errCh:
+			return fmt.Errorf("error running agent: %v", err)
+		case <-ctx.Done():
+			logger.Log.Debug("Closing agent")
+			// Close the error channel.
+			close(errCh)
+			// Wait for the workers to finish.
+			a.wg.Wait()
+			return nil
 		}
 	}
 }
 
-func (a *Agent) LoadMetrics() {
-	// Check whether "test‑get" mode is enabled.
-	if !a.config.Agent.EnableTestGet {
-		// Send metrics as a batch to the server.
-		var metrics = []models.Metrics{}
-		for name, val := range a.storage.Gauges {
-			floatVal := float64(val)
-			metrics = append(metrics, models.Metrics{
-				ID:    name,
-				MType: models.Gauge,
-				Value: &floatVal,
-			})
-		}
-		for name, val := range a.storage.Counters {
-			intVal := int64(val)
-			metrics = append(metrics, models.Metrics{
-				ID:    name,
-				MType: models.Counter,
-				Delta: &intVal,
-			})
-		}
+// LoadMetrics loads metrics from the agent storage.
+func (a *Agent) LoadMetrics() []models.Metrics {
+	a.storage.mu.RLock()
+	defer a.storage.mu.RUnlock()
 
-	} else {
-		logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
-		// “Test‑get” mode: request metrics from the server.
-		for name, val := range a.storage.Counters {
-			if err := GetMetric(a, name, val); err != nil {
-				logger.Log.Error("error getting ", name, ": ", err)
-			}
-		}
-		for name, val := range a.storage.Gauges {
-			if err := GetMetric(a, name, val); err != nil {
-				logger.Log.Error("error getting ", name, ": ", err)
-			}
-		}
+	var metrics = []models.Metrics{}
+	// Load gauges.
+	for name, val := range a.storage.Gauges {
+		floatVal := float64(val)
+		metrics = append(metrics, models.Metrics{
+			ID:    name,
+			MType: models.Gauge,
+			Value: &floatVal,
+		})
 	}
+	// Load counters.
+	for name, val := range a.storage.Counters {
+		intVal := int64(val)
+		metrics = append(metrics, models.Metrics{
+			ID:    name,
+			MType: models.Counter,
+			Delta: &intVal,
+		})
+	}
+	return metrics
 }
 
 // SendMetricsBatch sends a batch of metrics to the server.
-func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
+func (a *Agent) SendMetricsBatch(metrics []models.Metrics) error {
+	logger.Log.Debug("Reporting metrics...")
+
 	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Connection.Host)
 
 	// Marshal the body to JSON.
@@ -106,11 +141,14 @@ func SendMetricsBatch(a *Agent, metrics []models.Metrics) error {
 		return fmt.Errorf("error marshalling request body: %v", err)
 	}
 
-	err = a.Request("batch", endpoint, bodyBytes)
-	if err != nil {
-		return fmt.Errorf("failed to send: %v", err)
+	// if len(a.jobsQueue) == cap(a.jobsQueue) {
+	// 	<-a.jobsQueue
+	// }
+	a.jobsQueue <- batchRequest{
+		name:      "batch",
+		endpoint:  endpoint,
+		bodyBytes: bodyBytes,
 	}
-
 	return nil
 }
 
@@ -144,7 +182,7 @@ func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
 	return nil
 }
 
-func (a Agent) Request(name string, endpoint string, bodyBytes []byte) error {
+func (a *Agent) Request(name string, endpoint string, bodyBytes []byte) error {
 	logger.Log.Debugf("Request: %s %s", name, endpoint)
 
 	// Create a new request.

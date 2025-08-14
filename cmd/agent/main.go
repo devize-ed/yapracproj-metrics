@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -40,8 +41,11 @@ func run() error {
 
 	a := agent.NewAgent(client, cfg) // Create a new agent instance.
 
+	// Create a context.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Start the agent to collect and report metrics.
-	if err := a.Run(); err != nil {
+	if err := a.Run(ctx); err != nil {
 		return fmt.Errorf("failed to run agent: %w", err)
 	}
 
