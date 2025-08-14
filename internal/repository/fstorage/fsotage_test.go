@@ -70,7 +70,9 @@ func TestFileSaver_SaveAndRestore(t *testing.T) {
 			// Create the storage and file saver
 			memStorage := mstorage.NewMemStorage()
 			fs := NewFileSaver(context.Background(), config, memStorage)
-			defer fs.Close()
+			defer func() {
+				require.NoError(t, fs.Close(), "failed to close file saver")
+			}()
 
 			// Set gauge values
 			for _, g := range tt.gauges {
@@ -90,7 +92,9 @@ func TestFileSaver_SaveAndRestore(t *testing.T) {
 			// Create a new FileSaver to test restoration
 			newMemStorage := mstorage.NewMemStorage()
 			newFs := NewFileSaver(context.Background(), config, newMemStorage)
-			defer newFs.Close()
+			defer func() {
+				require.NoError(t, newFs.Close(), "failed to close file saver")
+			}()
 
 			// Verify gauge values were restored
 			for _, g := range tt.gauges {
@@ -119,7 +123,9 @@ func TestFileSaver_GetAllMetrics(t *testing.T) {
 
 	memStorage := mstorage.NewMemStorage()
 	fs := NewFileSaver(context.Background(), config, memStorage)
-	defer fs.Close()
+	defer func() {
+		require.NoError(t, fs.Close(), "failed to close file saver")
+	}()
 
 	// Add some test data
 	gaugeVal := 42.5
@@ -149,7 +155,9 @@ func TestFileSaver_SaveBatch(t *testing.T) {
 
 	memStorage := mstorage.NewMemStorage()
 	fs := NewFileSaver(context.Background(), config, memStorage)
-	defer fs.Close()
+	defer func() {
+		require.NoError(t, fs.Close(), "failed to close file saver")
+	}()
 
 	// Create a batch of metrics
 	gaugeVal1 := 1.23
@@ -189,7 +197,9 @@ func TestFileSaver_SaveBatch(t *testing.T) {
 	// Create a new FileSaver to test restoration
 	newMemStorage := mstorage.NewMemStorage()
 	newFs := NewFileSaver(context.Background(), config, newMemStorage)
-	defer newFs.Close()
+	defer func() {
+		require.NoError(t, newFs.Close(), "failed to close file saver")
+	}()
 
 	// Verify all metrics were saved and restored correctly
 	val1, err := newFs.GetGauge(context.Background(), "gauge1")

@@ -8,13 +8,14 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSendMetric(t *testing.T) {
+func TestSendMetricsBatch(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		metric string
@@ -37,9 +38,16 @@ func TestSendMetric(t *testing.T) {
 		},
 	}
 
+	var gotStatus int
+	var gotPath string
+	var gotMethod string
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		gotStatus = http.StatusOK
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer srv.Close()
@@ -50,20 +58,39 @@ func TestSendMetric(t *testing.T) {
 	cfg.Connection.Host = host
 
 	agent := NewAgent(client, cfg)
+	// Ensure SendMetricsBatch can enqueue without blocking.
+	agent.jobsQueue = make(chan batchRequest, 1)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := SendMetric(agent, tt.args.metric, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("SendMetric() error = %v, wantErr %v", err, tt.wantErr)
+			err := agent.SendMetricsBatch([]models.Metrics{
+				{
+					ID:    tt.args.metric,
+					MType: "gauge",
+					Value: func() *float64 { v := float64(tt.args.value); return &v }(),
+				},
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SendMetricsBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
+			// Manually process the queued job (minimal change, no worker pool).
+			job := <-agent.jobsQueue
+			callErr := agent.Request(job.name, job.endpoint, job.bodyBytes)
+			if (callErr != nil) != tt.wantErr {
+				t.Errorf("Request() error = %v, wantErr %v", callErr, tt.wantErr)
+			}
+
+			assert.Equal(t, "/updates/", gotPath, "path should be /updates/")
+			assert.Equal(t, "POST", gotMethod, "method should be POST")
+			assert.Equal(t, tt.wantCode, gotStatus, "Expected status code to be %d", tt.wantCode)
 		})
-		assert.Equal(t, tt.wantCode, http.StatusOK, "Expected status code to be %d", tt.wantCode)
 	}
 }
 
 func TestGetMetric(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		metric string
@@ -84,9 +111,16 @@ func TestGetMetric(t *testing.T) {
 		},
 	}
 
+	var gotStatus int
+	var gotPath string
+	var gotMethod string
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		gotStatus = http.StatusOK
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer srv.Close()
@@ -97,13 +131,17 @@ func TestGetMetric(t *testing.T) {
 	cfg.Connection.Host = host
 
 	agent := NewAgent(client, cfg)
+	// Enable gzip path coverage without changing test shape (optional, harmless).
+	agent.config.Agent.EnableGzip = true
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := GetMetric(agent, tt.args.metric, Gauge(0)); (err != nil) != tt.wantErr {
 				t.Errorf("GetMetric() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			assert.Equal(t, "/value/", gotPath, "path should be /value/")
+			assert.Equal(t, "POST", gotMethod, "method should be POST")
+			assert.Equal(t, tt.wantCode, gotStatus, "Expected status code to be %d", tt.wantCode)
 		})
-		assert.Equal(t, tt.wantCode, http.StatusOK, "Expected status code to be %d", tt.wantCode)
 	}
 }
