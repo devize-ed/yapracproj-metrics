@@ -46,6 +46,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	// Get the number of workers.
 	numWorkers := a.config.Agent.RateLimit
 	// Create channels.
+	logger.Log.Debug("Creating jobs queue with ", 2*numWorkers, " capacity")
 	a.jobsQueue = make(chan batchRequest, 2*numWorkers)
 	defer close(a.jobsQueue)
 

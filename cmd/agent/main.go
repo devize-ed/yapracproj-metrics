@@ -27,11 +27,7 @@ func run() error {
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer func() {
-		if err := logger.Log.Sync(); err != nil {
-			logger.Log.Errorf("failed to sync logger: %v", err)
-		}
-	}()
+	defer logger.SafeSync()
 
 	// Log the agent start information.
 	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",

@@ -12,7 +12,7 @@ import (
 
 func TestHash(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		data []byte
@@ -50,7 +50,7 @@ func TestHash(t *testing.T) {
 
 func TestVerify(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		data []byte

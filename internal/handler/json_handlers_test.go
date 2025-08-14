@@ -14,7 +14,7 @@ import (
 
 func TestUpdateJsonHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
@@ -66,7 +66,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 
 func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()

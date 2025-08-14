@@ -174,8 +174,9 @@ func TestGetAgentConfig(t *testing.T) {
 				"ENABLE_GZIP":        "true",
 				"ENABLE_GET_METRICS": "true",
 				"KEY":                "test_key",
+				"RATE_LIMIT":         "1",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false"},
+			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: "localhost:8081"},
 				Agent: agentcfg.AgentConfig{
@@ -183,6 +184,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   1,
 					EnableGzip:     true,
 					EnableTestGet:  true,
+					RateLimit:      1,
 				},
 				Sign: sign.SignConfig{
 					Key: "test_key",
@@ -194,7 +196,7 @@ func TestGetAgentConfig(t *testing.T) {
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false", "-k=test2_key"},
+			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false", "-k=test2_key", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -202,6 +204,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   1,
 					EnableGzip:     false,
 					EnableTestGet:  false,
+					RateLimit:      5,
 				},
 				Sign: sign.SignConfig{
 					Key: "test2_key",
@@ -221,6 +224,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   2,
 					EnableGzip:     true,
 					EnableTestGet:  false,
+					RateLimit:      1,
 				},
 				Sign: sign.SignConfig{
 					Key: "",
@@ -245,6 +249,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   -1,
 					EnableGzip:     false,
 					EnableTestGet:  false,
+					RateLimit:      1,
 				},
 				Sign: sign.SignConfig{
 					Key: "",

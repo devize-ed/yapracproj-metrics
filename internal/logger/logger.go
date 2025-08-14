@@ -1,6 +1,10 @@
 package logger
 
 import (
+	"errors"
+	"os"
+	"syscall"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -34,4 +38,20 @@ func Initialize(level string) error {
 
 	Log = zl.Sugar()
 	return nil
+}
+
+func SafeSync() {
+	if Log == nil {
+		return
+	}
+	if err := Log.Sync(); err != nil {
+		var pe *os.PathError
+		if errors.As(err, &pe) && (errors.Is(pe.Err, syscall.EINVAL) || errors.Is(pe.Err, syscall.ENOTTY)) {
+			return
+		}
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTTY) {
+			return
+		}
+		Log.Errorf("failed to sync logger: %v", err)
+	}
 }

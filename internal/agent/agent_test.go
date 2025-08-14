@@ -15,7 +15,7 @@ import (
 
 func TestSendMetricsBatch(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		metric string
@@ -90,7 +90,7 @@ func TestSendMetricsBatch(t *testing.T) {
 
 func TestGetMetric(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	type args struct {
 		metric string

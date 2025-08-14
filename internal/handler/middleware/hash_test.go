@@ -14,7 +14,7 @@ import (
 
 func TestHashMiddleware(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	requestBody := `{
 		"id":"LastGC",

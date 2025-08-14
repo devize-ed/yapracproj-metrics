@@ -41,7 +41,7 @@ func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp 
 
 func TestUpdateHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms, "")
@@ -80,7 +80,7 @@ func TestUpdateHandler(t *testing.T) {
 
 func TestListAllHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms, "")
@@ -110,7 +110,7 @@ func TestListAllHandler(t *testing.T) {
 
 func TestGetMetricHandler(t *testing.T) {
 	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	defer logger.SafeSync()
 
 	ms := mstorage.NewMemStorage()
 	h := NewHandler(ms, "")

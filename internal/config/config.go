@@ -88,6 +88,7 @@ func GetAgentConfig() (AgentConfig, error) {
 	flag.IntVar(&cfg.Agent.PollInterval, "p", 2, "polling interval in seconds")
 	flag.BoolVar(&cfg.Agent.EnableGzip, "c", true, "enable gzip compression for requests")
 	flag.BoolVar(&cfg.Agent.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
+	flag.IntVar(&cfg.Agent.RateLimit, "l", 1, "rate limit for the agent")
 	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
 
 	// Parse flags.
@@ -114,8 +115,8 @@ func GetAgentConfig() (AgentConfig, error) {
 	if cfg.Agent.ReportInterval < 0 {
 		return cfg, fmt.Errorf("REPORT_INTERVAL must be non-negative (got %d)", cfg.Agent.ReportInterval)
 	}
-	if cfg.Agent.RateLimit < 0 {
-		return cfg, fmt.Errorf("RATE_LIMIT must be non-negative (got %d)", cfg.Agent.RateLimit)
+	if cfg.Agent.RateLimit < 1 {
+		return cfg, fmt.Errorf("RATE_LIMIT must be greater than 0 (got %d)", cfg.Agent.RateLimit)
 	}
 	return cfg, nil
 }
