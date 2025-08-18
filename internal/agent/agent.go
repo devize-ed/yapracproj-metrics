@@ -18,11 +18,16 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+const batchSize = 10
+
 // Agent holds the HTTP client, metric storage, and configuration.
 type Agent struct {
-	client    *resty.Client
-	storage   *AgentStorage
-	config    config.AgentConfig
+	client  *resty.Client
+	storage *AgentStorage
+	config  config.AgentConfig
+}
+
+type jobs struct {
 	wg        sync.WaitGroup
 	jobsQueue chan batchRequest
 }
@@ -42,17 +47,14 @@ func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
 	}
 }
 
+func NewJobs(numWorkers int) *jobs {
+	logger.Log.Debug("Creating jobs queue with ", numWorkers, " workers")
+	return &jobs{
+		jobsQueue: make(chan batchRequest, numWorkers),
+	}
+}
+
 func (a *Agent) Run(ctx context.Context) error {
-	// Get the number of workers.
-	numWorkers := a.config.Agent.RateLimit
-	// Create channels.
-	logger.Log.Debug("Creating jobs queue with ", 2*numWorkers, " capacity")
-	a.jobsQueue = make(chan batchRequest, 2*numWorkers)
-	defer close(a.jobsQueue)
-
-	// Create a worker pool.
-	errCh := a.createWorkerPool(numWorkers)
-
 	// Convert interval values to time.Duration.
 	timePollInterval := time.Duration(a.config.Agent.PollInterval) * time.Second
 	timeReportInterval := time.Duration(a.config.Agent.ReportInterval) * time.Second
@@ -67,44 +69,79 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-pollTicker.C: // Collect metrics at the polling interval.
-			a.storage.CollectMetrics(ctx)
+			a.gatherMetrics()
 		case <-reportTicker.C: // Send metrics at the reporting interval.
-			// Check whether "test‑get" mode is enabled.
-			if !a.config.Agent.EnableTestGet {
-				// Send metrics as a batch to the server.
-				metrics := a.LoadMetrics()
-				if err := a.SendMetricsBatch(metrics); err != nil {
-					logger.Log.Error("error sending batch metrics: ", err)
-				}
-			} else {
-				logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
-				// “Test‑get” mode: request metrics from the server.
-				for name, val := range a.storage.Counters {
-					if err := GetMetric(a, name, val); err != nil {
-						logger.Log.Error("error getting ", name, ": ", err)
-					}
-				}
-				for name, val := range a.storage.Gauges {
-					if err := GetMetric(a, name, val); err != nil {
-						logger.Log.Error("error getting ", name, ": ", err)
-					}
-				}
-			}
-		case err := <-errCh:
-			return fmt.Errorf("error running agent: %v", err)
+			a.sendMetrics()
 		case <-ctx.Done():
 			logger.Log.Debug("Closing agent")
-			// Close the error channel.
-			close(errCh)
-			// Wait for the workers to finish.
-			a.wg.Wait()
 			return nil
 		}
 	}
 }
 
+func (a *Agent) gatherMetrics() {
+	a.storage.collectMetrics()
+}
+
+func (a *Agent) sendMetrics() {
+	logger.Log.Debug("Sending metrics")
+	// Check whether "test‑get" mode is enabled.
+	if !a.config.Agent.EnableTestGet {
+		// Get the number of workers.
+		numWorkers := a.config.Agent.RateLimit
+		// Create a jobs queue.
+		jobs := NewJobs(numWorkers)
+		// Create a worker pool.
+		errCh := jobs.createWorkerPool(a.request, numWorkers)
+
+		// Send metrics as a batch to the server.
+		metrics := a.loadMetrics()
+		if err := jobs.sendMetricsBatch(a.config.Connection.Host, metrics); err != nil {
+			logger.Log.Error("error sending batch metrics: ", err)
+		}
+		// Close the jobs queue after pushing all metrics.
+		close(jobs.jobsQueue)
+
+		// Wait for the workers to finish.
+		jobs.wg.Wait()
+		// Close the error channel.
+		close(errCh)
+		// Check for errors.
+		for err := range errCh {
+			logger.Log.Error("error sending metrics: ", err)
+		}
+		return
+	} else {
+		logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
+		// “Test‑get” mode: request metrics from the server.
+		// Copy the metrics from the storage to the temporary maps.
+		a.storage.mu.RLock()
+		tmpGauges := make(map[string]Gauge, len(a.storage.Gauges))
+		for metric, value := range a.storage.Gauges {
+			tmpGauges[metric] = value
+		}
+		tmpCounters := make(map[string]Counter, len(a.storage.Counters))
+		for metric, delta := range a.storage.Counters {
+			tmpCounters[metric] = delta
+		}
+		a.storage.mu.RUnlock()
+		// Get the metrics from the server.
+		for name, val := range tmpCounters {
+			if err := getMetric(a.request, a.config.Connection.Host, name, val); err != nil {
+				logger.Log.Error("error getting ", name, ": ", err)
+			}
+		}
+		for name, val := range tmpGauges {
+			if err := getMetric(a.request, a.config.Connection.Host, name, val); err != nil {
+				logger.Log.Error("error getting ", name, ": ", err)
+			}
+		}
+	}
+}
+
 // LoadMetrics loads metrics from the agent storage.
-func (a *Agent) LoadMetrics() []models.Metrics {
+func (a *Agent) loadMetrics() []models.Metrics {
+	logger.Log.Debug("Loading metrics snapshot")
 	a.storage.mu.RLock()
 	defer a.storage.mu.RUnlock()
 
@@ -131,31 +168,34 @@ func (a *Agent) LoadMetrics() []models.Metrics {
 }
 
 // SendMetricsBatch sends a batch of metrics to the server.
-func (a *Agent) SendMetricsBatch(metrics []models.Metrics) error {
-	logger.Log.Debug("Reporting metrics...")
+func (j *jobs) sendMetricsBatch(host string, metrics []models.Metrics) error {
+	// Нужно разделить metrics на батчи по N метрик (const) и отправить в jobsQueue
+	for i := 0; i < len(metrics); i += batchSize {
+		batch := metrics[i:min(i+batchSize, len(metrics))]
 
-	endpoint := fmt.Sprintf("http://%s/updates/", a.config.Connection.Host)
+		logger.Log.Debugf("Sending metrics batch to %s", host)
 
-	// Marshal the body to JSON.
-	bodyBytes, err := json.Marshal(metrics)
-	if err != nil {
-		return fmt.Errorf("error marshalling request body: %v", err)
+		endpoint := fmt.Sprintf("http://%s/updates/", host)
+
+		// Marshal the body to JSON.
+		bodyBytes, err := json.Marshal(batch)
+		if err != nil {
+			return fmt.Errorf("error marshalling request body: %w", err)
+		}
+
+		j.jobsQueue <- batchRequest{
+			name:      fmt.Sprintf("batch %d", i/batchSize),
+			endpoint:  endpoint,
+			bodyBytes: bodyBytes,
+		}
 	}
-
-	// if len(a.jobsQueue) == cap(a.jobsQueue) {
-	// 	<-a.jobsQueue
-	// }
-	a.jobsQueue <- batchRequest{
-		name:      "batch",
-		endpoint:  endpoint,
-		bodyBytes: bodyBytes,
-	}
+	logger.Log.Debugf("All batches sent")
 	return nil
 }
 
 // GetMetric requests a metric from the server for testing purposes.
-func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
-	endpoint := fmt.Sprintf("http://%s/value/", a.config.Connection.Host)
+func getMetric[T MetricValue](request func(name string, endpoint string, bodyBytes []byte) error, host, metric string, value T) error {
+	endpoint := fmt.Sprintf("http://%s/value/", host)
 
 	body := models.Metrics{
 		ID: metric,
@@ -173,29 +213,35 @@ func GetMetric[T MetricValue](a *Agent, metric string, value T) error {
 	// Marshal the body to JSON.
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("error marshalling request body: %v", err)
+		return fmt.Errorf("error marshalling request body: %w", err)
 	}
 
-	err = a.Request(metric, endpoint, bodyBytes)
+	err = request(metric, endpoint, bodyBytes)
 	if err != nil {
-		return fmt.Errorf("failed to send: %v", err)
+		return fmt.Errorf("failed to send: %w", err)
 	}
 	return nil
 }
 
-func (a *Agent) Request(name string, endpoint string, bodyBytes []byte) error {
+func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	logger.Log.Debugf("Request: %s %s", name, endpoint)
 
 	// Create a new request.
 	req := a.client.R().
 		SetHeader("Content-Type", "application/json")
 
-	var body []byte
+	var (
+		body []byte
+		err  error
+	)
 	// Compress the request body if the gzip is enabled.
 	if a.config.Agent.EnableGzip {
 		req.SetHeader("Content-Encoding", "gzip").
 			SetHeader("Accept-Encoding", "gzip")
-		body = Compress(bodyBytes)
+		body, err = compress(bodyBytes)
+		if err != nil {
+			return fmt.Errorf("failed to compress request body: %w", err)
+		}
 	} else {
 		body = bodyBytes
 	}
@@ -215,7 +261,7 @@ func (a *Agent) Request(name string, endpoint string, bodyBytes []byte) error {
 
 	resp, err := req.Post(endpoint)
 	if err != nil {
-		return fmt.Errorf("failed to POST request: %v", err)
+		return fmt.Errorf("failed to POST request: %w", err)
 	}
 
 	logger.Log.Debugf("Response status-code: %d", resp.StatusCode())
@@ -223,15 +269,19 @@ func (a *Agent) Request(name string, endpoint string, bodyBytes []byte) error {
 	return nil
 }
 
-func Compress(data []byte) []byte {
+func compress(data []byte) ([]byte, error) {
 	logger.Log.Debugf("Compressing data")
 	// Compress the JSON body.
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
-	_, _ = zw.Write(data)
-	_ = zw.Close()
+	if _, err := zw.Write(data); err != nil {
+		return nil, fmt.Errorf("gzip write failed: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("gzip close failed: %w", err)
+	}
 
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 func clientWithRetries(client *resty.Client) *resty.Client {
@@ -254,7 +304,7 @@ func clientWithRetries(client *resty.Client) *resty.Client {
 		AddRetryCondition(func(r *resty.Response, err error) bool {
 			// Check if the error is retryable.
 			if err != nil && isErrorRetryable(err) {
-				logger.Log.Warnf("network error: %v — will retry", err)
+				logger.Log.Warnf("network error: %w — will retry", err)
 				return true
 			}
 

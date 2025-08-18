@@ -57,7 +57,7 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 			// Read the body of the request.
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				logger.Log.Debugf("Error reading request body: %v", err)
+				logger.Log.Debugf("Error reading request body: %w", err)
 				http.Error(w, "Error reading request body", http.StatusBadRequest)
 				return
 			}

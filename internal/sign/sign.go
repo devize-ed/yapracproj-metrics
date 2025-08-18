@@ -34,7 +34,7 @@ func Verify(data []byte, key string, headerHash string) (bool, error) {
 	hash := h.Sum(nil)
 	headerHashBytes, err := hex.DecodeString(headerHash)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode header hash: %v", err)
+		return false, fmt.Errorf("failed to decode header hash: %w", err)
 	}
 
 	// Compare the hash with the data.

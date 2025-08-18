@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"math/rand/v2"
 	"runtime"
 	"sync"
@@ -36,30 +35,34 @@ func NewAgentStorage() *AgentStorage {
 	}
 }
 
-// CollectMetrics collects and store metrics.
-func (s *AgentStorage) CollectMetrics(ctx context.Context) {
+// collectMetrics collects and store metrics.
+func (s *AgentStorage) collectMetrics() {
 	var wg sync.WaitGroup
-	wg.Add(3)
 
 	logger.Log.Debug("Collecting metrics")
-
+	// Collect runtime metrics.
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		s.collectRuntimeMetrics(ctx)
+		s.collectRuntimeMetrics()
 	}()
+	// Collect additional metrics.
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		s.collectAdditionalMetrics(ctx)
+		s.collectAdditionalMetrics()
 	}()
+	// Collect system metrics.
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		s.collectSystemMetrics(ctx)
+		s.collectSystemMetrics()
 	}()
 	wg.Wait()
 }
 
 // collectRuntimeMetrics collects runtime metrics and stores them in the agent storage.
-func (s *AgentStorage) collectRuntimeMetrics(ctx context.Context) {
+func (s *AgentStorage) collectRuntimeMetrics() {
 	// Read metrics from the runtime package.
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -97,7 +100,7 @@ func (s *AgentStorage) collectRuntimeMetrics(ctx context.Context) {
 }
 
 // collectAdditionalMetrics adds additional metrics to the agent storage.
-func (s *AgentStorage) collectAdditionalMetrics(ctx context.Context) {
+func (s *AgentStorage) collectAdditionalMetrics() {
 	s.mu.Lock()
 	s.Counters["PollCount"]++                       // Increment the poll count
 	s.Gauges["RandomValue"] = Gauge(rand.Float64()) // Add a random value to the metrics.
@@ -105,7 +108,7 @@ func (s *AgentStorage) collectAdditionalMetrics(ctx context.Context) {
 }
 
 // collectSystemMetrics collects system metrics and stores them in the agent storage.
-func (s *AgentStorage) collectSystemMetrics(ctx context.Context) {
+func (s *AgentStorage) collectSystemMetrics() {
 	m, err := mem.VirtualMemory()
 	if err != nil {
 		logger.Log.Error("Error collecting system metrics: ", err)

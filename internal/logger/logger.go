@@ -52,6 +52,6 @@ func SafeSync() {
 		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTTY) {
 			return
 		}
-		Log.Errorf("failed to sync logger: %v", err)
+		Log.Errorf("failed to sync logger: %w", err)
 	}
 }

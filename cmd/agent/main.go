@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/agent"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
@@ -30,16 +33,15 @@ func run() error {
 	defer logger.SafeSync()
 
 	// Log the agent start information.
-	logger.Log.Infof("Agent config: poll_interval=%d report_interval=%d host=%s enable_gzip=%v",
-		cfg.Agent.PollInterval, cfg.Agent.ReportInterval, cfg.Connection.Host, cfg.Agent.EnableGzip)
+	logger.Log.Infof("Agent config: %+v", cfg)
 
 	client := resty.New() // Initialize HTTP client.
 
 	a := agent.NewAgent(client, cfg) // Create a new agent instance.
 
-	// Create a context.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Create a context that listens for OS signals to shut down the agent.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	// Start the agent to collect and report metrics.
 	if err := a.Run(ctx); err != nil {
 		return fmt.Errorf("failed to run agent: %w", err)

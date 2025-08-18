@@ -17,15 +17,15 @@ func testMemoryStorage(t *testing.T, ms *mstorage.MemStorage) {
 	ctx := context.Background()
 	delta := int64(5)
 	if err := ms.AddCounter(ctx, "testCounter", &delta); err != nil {
-		t.Fatalf("Failed to add counter: %v", err)
+		t.Fatalf("Failed to add counter: %w", err)
 	}
 	g1 := 10.5
 	if err := ms.SetGauge(ctx, "testGauge1", &g1); err != nil {
-		t.Fatalf("Failed to set gauge: %v", err)
+		t.Fatalf("Failed to set gauge: %w", err)
 	}
 	g2 := 1.5
 	if err := ms.SetGauge(ctx, "testGauge2", &g2); err != nil {
-		t.Fatalf("Failed to set gauge: %v", err)
+		t.Fatalf("Failed to set gauge: %w", err)
 	}
 }
 

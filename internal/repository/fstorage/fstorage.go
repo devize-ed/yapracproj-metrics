@@ -49,7 +49,7 @@ func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *msto
 	// If the restore is set, restore the metrics from the file.
 	if config.Restore {
 		if err := fs.restoreFromFile(ctx); err != nil {
-			logger.Log.Errorf("failed to restore metrics from file: %v", err)
+			logger.Log.Errorf("failed to restore metrics from file: %w", err)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (f *FileSaver) restoreFromFile(ctx context.Context) error {
 
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			logger.Log.Warnf("data storage error: %v", err)
+			logger.Log.Warnf("data storage error: %w", err)
 			return nil
 		}
 		return fmt.Errorf("error unmarshal metrics: %w", err)
@@ -277,7 +277,7 @@ func (f *FileSaver) intervalSaver(ctx context.Context, interval int) {
 		select {
 		case <-ticker.C:
 			if err := f.saveToFile(ctx); err != nil {
-				logger.Log.Errorf("periodic save failed: %v", err)
+				logger.Log.Errorf("periodic save failed: %w", err)
 			}
 		case <-ctx.Done():
 			logger.Log.Debug("Interval saver stopping, performing final save")

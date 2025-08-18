@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +16,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		logger.Log.Fatal(err)
+		log.Fatal(err)
 	}
 }
 
@@ -38,7 +39,7 @@ func run() error {
 	}
 	defer func() {
 		if err := repository.Close(); err != nil {
-			logger.Log.Errorf("failed to close repository: %v", err)
+			logger.Log.Errorf("failed to close repository: %w", err)
 		}
 	}()
 

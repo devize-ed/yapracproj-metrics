@@ -40,7 +40,7 @@ func NewRepository(ctx context.Context, config repository.RepositoryConfig) Repo
 		logger.Log.Info("Using database storage")
 		db, err := db.NewDB(ctx, &config.DBConfig)
 		if err != nil {
-			logger.Log.Errorf("failed to create repository: %v", err)
+			logger.Log.Errorf("failed to create repository: %w", err)
 		}
 		return db
 	} else if config.FSConfig.FPath != "" {
