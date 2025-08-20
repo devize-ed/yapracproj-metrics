@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/sign"
 	"github.com/go-resty/resty/v2"
+	"go.uber.org/zap"
 )
 
 const batchSize = 10
@@ -25,11 +25,13 @@ type Agent struct {
 	client  *resty.Client
 	storage *AgentStorage
 	config  config.AgentConfig
+	logger  *zap.SugaredLogger
 }
 
 type jobs struct {
 	wg        sync.WaitGroup
 	jobsQueue chan batchRequest
+	logger    *zap.SugaredLogger
 }
 
 type batchRequest struct {
@@ -39,18 +41,19 @@ type batchRequest struct {
 }
 
 // NewAgent returns a new Agent that uses the given HTTP client and configuration.
-func NewAgent(client *resty.Client, config config.AgentConfig) *Agent {
+func NewAgent(client *resty.Client, config config.AgentConfig, logger *zap.SugaredLogger) *Agent {
 	return &Agent{
-		client:  clientWithRetries(client),
-		storage: NewAgentStorage(),
+		client:  clientWithRetries(client, logger),
+		storage: NewAgentStorage(logger),
 		config:  config,
+		logger:  logger,
 	}
 }
 
-func NewJobs(numWorkers int) *jobs {
-	logger.Log.Debug("Creating jobs queue with ", numWorkers, " workers")
+func NewJobs(numWorkers int, logger *zap.SugaredLogger) *jobs {
 	return &jobs{
 		jobsQueue: make(chan batchRequest, numWorkers),
+		logger:    logger,
 	}
 }
 
@@ -71,9 +74,11 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-pollTicker.C: // Collect metrics at the polling interval.
 			a.gatherMetrics()
 		case <-reportTicker.C: // Send metrics at the reporting interval.
-			a.sendMetrics()
+			if err := a.sendMetrics(); err != nil {
+				a.logger.Error("error reporting metrics: %w", err)
+			}
 		case <-ctx.Done():
-			logger.Log.Debug("Closing agent")
+			a.logger.Debug("Closing agent")
 			return nil
 		}
 	}
@@ -83,21 +88,22 @@ func (a *Agent) gatherMetrics() {
 	a.storage.collectMetrics()
 }
 
-func (a *Agent) sendMetrics() {
-	logger.Log.Debug("Sending metrics")
+func (a *Agent) sendMetrics() error {
+	a.logger.Debug("Sending metrics")
 	// Check whether "test‑get" mode is enabled.
 	if !a.config.Agent.EnableTestGet {
 		// Get the number of workers.
 		numWorkers := a.config.Agent.RateLimit
 		// Create a jobs queue.
-		jobs := NewJobs(numWorkers)
+		a.logger.Debug("Creating jobs queue with ", numWorkers, " workers")
+		jobs := NewJobs(numWorkers, a.logger)
 		// Create a worker pool.
-		errCh := jobs.createWorkerPool(a.request, numWorkers)
+		errCh := jobs.createWorkerPool(a.request, numWorkers, a.logger)
 
 		// Send metrics as a batch to the server.
 		metrics := a.loadMetrics()
-		if err := jobs.sendMetricsBatch(a.config.Connection.Host, metrics); err != nil {
-			logger.Log.Error("error sending batch metrics: ", err)
+		if err := jobs.sendMetricsBatch(a.config.Connection.Host, metrics, a.logger); err != nil {
+			return fmt.Errorf("error sending batch metrics: %w", err)
 		}
 		// Close the jobs queue after pushing all metrics.
 		close(jobs.jobsQueue)
@@ -107,12 +113,13 @@ func (a *Agent) sendMetrics() {
 		// Close the error channel.
 		close(errCh)
 		// Check for errors.
+		var errs error
 		for err := range errCh {
-			logger.Log.Error("error sending metrics: ", err)
+			errs = errors.Join(errs, err)
 		}
-		return
+		return errs
 	} else {
-		logger.Log.Debug("Test‑get mode enabled, skipping sending metrics.")
+		a.logger.Debug("Test‑get mode enabled, skipping sending metrics.")
 		// “Test‑get” mode: request metrics from the server.
 		// Copy the metrics from the storage to the temporary maps.
 		a.storage.mu.RLock()
@@ -128,20 +135,21 @@ func (a *Agent) sendMetrics() {
 		// Get the metrics from the server.
 		for name, val := range tmpCounters {
 			if err := getMetric(a.request, a.config.Connection.Host, name, val); err != nil {
-				logger.Log.Error("error getting ", name, ": ", err)
+				return fmt.Errorf("error getting %s: %w", name, err)
 			}
 		}
 		for name, val := range tmpGauges {
 			if err := getMetric(a.request, a.config.Connection.Host, name, val); err != nil {
-				logger.Log.Error("error getting ", name, ": ", err)
+				return fmt.Errorf("error getting %s: %w", name, err)
 			}
 		}
 	}
+	return nil
 }
 
 // LoadMetrics loads metrics from the agent storage.
 func (a *Agent) loadMetrics() []models.Metrics {
-	logger.Log.Debug("Loading metrics snapshot")
+	a.logger.Debug("Loading metrics snapshot")
 	a.storage.mu.RLock()
 	defer a.storage.mu.RUnlock()
 
@@ -168,12 +176,12 @@ func (a *Agent) loadMetrics() []models.Metrics {
 }
 
 // SendMetricsBatch sends a batch of metrics to the server.
-func (j *jobs) sendMetricsBatch(host string, metrics []models.Metrics) error {
+func (j *jobs) sendMetricsBatch(host string, metrics []models.Metrics, logger *zap.SugaredLogger) error {
 	// Нужно разделить metrics на батчи по N метрик (const) и отправить в jobsQueue
 	for i := 0; i < len(metrics); i += batchSize {
 		batch := metrics[i:min(i+batchSize, len(metrics))]
 
-		logger.Log.Debugf("Sending metrics batch to %s", host)
+		logger.Debugf("Sending metrics batch to %s", host)
 
 		endpoint := fmt.Sprintf("http://%s/updates/", host)
 
@@ -189,7 +197,7 @@ func (j *jobs) sendMetricsBatch(host string, metrics []models.Metrics) error {
 			bodyBytes: bodyBytes,
 		}
 	}
-	logger.Log.Debugf("All batches sent")
+	logger.Debugf("All batches sent")
 	return nil
 }
 
@@ -224,7 +232,7 @@ func getMetric[T MetricValue](request func(name string, endpoint string, bodyByt
 }
 
 func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
-	logger.Log.Debugf("Request: %s %s", name, endpoint)
+	a.logger.Debugf("Request: %s %s", name, endpoint)
 
 	// Create a new request.
 	req := a.client.R().
@@ -238,7 +246,7 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	if a.config.Agent.EnableGzip {
 		req.SetHeader("Content-Encoding", "gzip").
 			SetHeader("Accept-Encoding", "gzip")
-		body, err = compress(bodyBytes)
+		body, err = compress(bodyBytes, a.logger)
 		if err != nil {
 			return fmt.Errorf("failed to compress request body: %w", err)
 		}
@@ -248,7 +256,7 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 
 	// Set the hash of the request body.
 	if a.config.Sign.Key != "" {
-		logger.Log.Debugf("Setting hash header")
+		a.logger.Debugf("Setting hash header")
 		hash := sign.Hash(body, a.config.Sign.Key)
 		req.SetHeader(sign.HashHeader, hash)
 	}
@@ -256,21 +264,21 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	// Set the request body.
 	req.SetBody(body)
 
-	logger.Log.Debugf("Request body: %s", string(bodyBytes))
-	logger.Log.Debugf("Request header: %v", req.Header)
+	a.logger.Debugf("Request body: %s", string(bodyBytes))
+	a.logger.Debugf("Request header: %v", req.Header)
 
 	resp, err := req.Post(endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to POST request: %w", err)
 	}
 
-	logger.Log.Debugf("Response status-code: %d", resp.StatusCode())
-	logger.Log.Debugf("Response header: %v", resp.Header())
+	a.logger.Debugf("Response status-code: %d", resp.StatusCode())
+	a.logger.Debugf("Response header: %v", resp.Header())
 	return nil
 }
 
-func compress(data []byte) ([]byte, error) {
-	logger.Log.Debugf("Compressing data")
+func compress(data []byte, logger *zap.SugaredLogger) ([]byte, error) {
+	logger.Debugf("Compressing data")
 	// Compress the JSON body.
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
@@ -284,7 +292,7 @@ func compress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func clientWithRetries(client *resty.Client) *resty.Client {
+func clientWithRetries(client *resty.Client, logger *zap.SugaredLogger) *resty.Client {
 	// Set the retry count and backoff delay.
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
 
@@ -298,13 +306,13 @@ func clientWithRetries(client *resty.Client) *resty.Client {
 			}
 			// Get the backoff delay.
 			delay := backoffs[n]
-			logger.Log.Debugf("retry attempt %d, waiting %s", r.Request.Attempt, delay)
+			logger.Debugf("retry attempt %d, waiting %s", r.Request.Attempt, delay)
 			return delay, nil
 		}).
 		AddRetryCondition(func(r *resty.Response, err error) bool {
 			// Check if the error is retryable.
 			if err != nil && isErrorRetryable(err) {
-				logger.Log.Warnf("network error: %w — will retry", err)
+				logger.Warnf("network error: %w — will retry", err)
 				return true
 			}
 

@@ -13,12 +13,15 @@ import (
 )
 
 func TestUpdateJsonHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "")
+	h := NewHandler(ms, "", logger)
 
 	r := chi.NewRouter()
 	r.Post(endpoint, h.UpdateMetricJSONHandler())
@@ -65,12 +68,15 @@ func TestUpdateJsonHandler(t *testing.T) {
 }
 
 func TestHandler_GetMetricJsonHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "")
+	h := NewHandler(ms, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()

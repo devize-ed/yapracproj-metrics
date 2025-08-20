@@ -5,8 +5,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/sign"
+	"go.uber.org/zap"
 )
 
 type hashResponseWriter struct {
@@ -36,13 +36,13 @@ func (h *hashResponseWriter) WriteHeader(status int) {
 }
 
 // HashMiddleware is a middleware that verifies the hash of the request body.
-func HashMiddleware(key string) func(http.Handler) http.Handler {
+func HashMiddleware(key string, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.Log.Debugf("Hash middleware with key %s", key)
+			logger.Debugf("Hash middleware with key %s", key)
 			// If the key is empty, skip the hash verification.
 			if key == "" {
-				logger.Log.Debugf("key is empty")
+				logger.Debugf("key is empty")
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -57,7 +57,7 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 			// Read the body of the request.
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				logger.Log.Debugf("Error reading request body: %w", err)
+				logger.Debugf("Error reading request body: %w", err)
 				http.Error(w, "Error reading request body", http.StatusBadRequest)
 				return
 			}
@@ -73,12 +73,12 @@ func HashMiddleware(key string) func(http.Handler) http.Handler {
 				return
 			}
 
-			logger.Log.Debugf("Hash verification passed")
+			logger.Debugf("Hash verification passed")
 			// Hash the response body.
 			hw := newHashResponseWriter()
 			next.ServeHTTP(hw, r)
 			hw.WriteTo(w, key)
-			logger.Log.Debugf("Hash response written")
+			logger.Debugf("Hash response written")
 		})
 	}
 }

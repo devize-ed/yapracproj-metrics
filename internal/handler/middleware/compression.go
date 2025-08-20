@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"go.uber.org/zap"
 )
 
 // compressWriter wraps http.ResponseWriter to handle gzip compression.
@@ -105,49 +105,51 @@ func (c *compressReader) Close() error {
 }
 
 // MiddlewareGzip is a middleware that handles gzip compression and decompression.
-func MiddlewareGzip(h http.Handler) http.Handler {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
-		ow := w // Set original http.ResponseWriter.
-		logger.Log.Debug("req header", r.Header)
-		// check if request is compressed, decompress it and remove Content-Encoding header.
-		contentEncoding := r.Header.Get("Content-Encoding")
-		sendsGzip := strings.Contains(contentEncoding, "gzip")
-		logger.Log.Debugf("Content-Encoding: %s, sendsGzip: %t", contentEncoding, sendsGzip)
-		if sendsGzip {
-			logger.Log.Debugf("Received data is compressed,")
-			cr, err := NewCompressReader(r.Body)
-			if err != nil {
-				logger.Log.Debugf("error decompressing request: ", err)
-				http.Error(w, "error decompressing request", http.StatusInternalServerError)
-				return
+func MiddlewareGzip(logger *zap.SugaredLogger) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		logFn := func(w http.ResponseWriter, r *http.Request) {
+			ow := w // Set original http.ResponseWriter.
+			logger.Debug("req header", r.Header)
+			// check if request is compressed, decompress it and remove Content-Encoding header.
+			contentEncoding := r.Header.Get("Content-Encoding")
+			sendsGzip := strings.Contains(contentEncoding, "gzip")
+			logger.Debugf("Content-Encoding: %s, sendsGzip: %t", contentEncoding, sendsGzip)
+			if sendsGzip {
+				logger.Debugf("Received data is compressed,")
+				cr, err := NewCompressReader(r.Body)
+				if err != nil {
+					logger.Debugf("error decompressing request: ", err)
+					http.Error(w, "error decompressing request", http.StatusInternalServerError)
+					return
+				}
+				r.Body = cr
+				defer func() {
+					if err := cr.Close(); err != nil {
+						logger.Debugf("error closing request body: ", err)
+					}
+				}()
+
+				r.Header.Del("Content-Encoding")
+				r.Header.Del("Content-Length")
 			}
-			r.Body = cr
-			defer func() {
-				if err := cr.Close(); err != nil {
-					logger.Log.Debugf("error closing request body: ", err)
-				}
-			}()
 
-			r.Header.Del("Content-Encoding")
-			r.Header.Del("Content-Length")
+			// Check if agent is accepting gzip and compress it.
+			acceptEncoding := r.Header.Get("Accept-Encoding")
+			supportsGzip := strings.Contains(acceptEncoding, "gzip")
+			logger.Debugf("Accept-Encoding: %s, gzip: %t", acceptEncoding, supportsGzip)
+			if supportsGzip {
+				cw := newCompressWriter(w, true)
+				w.Header().Set("Content-Encoding", "gzip")
+				defer func() {
+					if err := cw.Close(); err != nil {
+						logger.Debugf("error closing response body: ", err)
+					}
+				}()
+				ow = cw
+			}
+			h.ServeHTTP(ow, r)
 		}
 
-		// Check if agent is accepting gzip and compress it.
-		acceptEncoding := r.Header.Get("Accept-Encoding")
-		supportsGzip := strings.Contains(acceptEncoding, "gzip")
-		logger.Log.Debugf("Accept-Encoding: %s, gzip: %t", acceptEncoding, supportsGzip)
-		if supportsGzip {
-			cw := newCompressWriter(w, true)
-			w.Header().Set("Content-Encoding", "gzip")
-			defer func() {
-				if err := cw.Close(); err != nil {
-					logger.Log.Debugf("error closing response body: ", err)
-				}
-			}()
-			ow = cw
-		}
-		h.ServeHTTP(ow, r)
+		return http.HandlerFunc(logFn)
 	}
-
-	return http.HandlerFunc(logFn)
 }

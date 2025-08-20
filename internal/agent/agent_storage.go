@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/shirou/gopsutil/v4/mem"
+	"go.uber.org/zap"
 )
 
 // Metric types for the agent storage
@@ -25,13 +25,15 @@ type AgentStorage struct {
 	mu       sync.RWMutex
 	Counters map[string]Counter
 	Gauges   map[string]Gauge
+	logger   *zap.SugaredLogger
 }
 
 // NewAgentStorage initializes a new AgentStorage instance with empty maps for counters and gauges.
-func NewAgentStorage() *AgentStorage {
+func NewAgentStorage(logger *zap.SugaredLogger) *AgentStorage {
 	return &AgentStorage{
 		Counters: make(map[string]Counter),
 		Gauges:   make(map[string]Gauge),
+		logger:   logger,
 	}
 }
 
@@ -39,7 +41,7 @@ func NewAgentStorage() *AgentStorage {
 func (s *AgentStorage) collectMetrics() {
 	var wg sync.WaitGroup
 
-	logger.Log.Debug("Collecting metrics")
+	s.logger.Debug("Collecting metrics")
 	// Collect runtime metrics.
 	wg.Add(1)
 	go func() {
@@ -111,7 +113,7 @@ func (s *AgentStorage) collectAdditionalMetrics() {
 func (s *AgentStorage) collectSystemMetrics() {
 	m, err := mem.VirtualMemory()
 	if err != nil {
-		logger.Log.Error("Error collecting system metrics: ", err)
+		s.logger.Error("Error collecting system metrics: ", err)
 	}
 	s.mu.Lock()
 	s.Gauges["TotalMemory"] = Gauge(m.Total)

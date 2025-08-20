@@ -10,6 +10,7 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // tmpFilePath returns a temporary file path for testing
@@ -69,7 +70,7 @@ func TestFileSaver_SaveAndRestore(t *testing.T) {
 
 			// Create the storage and file saver
 			memStorage := mstorage.NewMemStorage()
-			fs := NewFileSaver(context.Background(), config, memStorage)
+			fs := NewFileSaver(context.Background(), config, memStorage, zap.NewNop().Sugar())
 			defer func() {
 				require.NoError(t, fs.Close(), "failed to close file saver")
 			}()
@@ -91,7 +92,7 @@ func TestFileSaver_SaveAndRestore(t *testing.T) {
 
 			// Create a new FileSaver to test restoration
 			newMemStorage := mstorage.NewMemStorage()
-			newFs := NewFileSaver(context.Background(), config, newMemStorage)
+			newFs := NewFileSaver(context.Background(), config, newMemStorage, zap.NewNop().Sugar())
 			defer func() {
 				require.NoError(t, newFs.Close(), "failed to close file saver")
 			}()
@@ -122,7 +123,7 @@ func TestFileSaver_GetAllMetrics(t *testing.T) {
 	}
 
 	memStorage := mstorage.NewMemStorage()
-	fs := NewFileSaver(context.Background(), config, memStorage)
+	fs := NewFileSaver(context.Background(), config, memStorage, zap.NewNop().Sugar())
 	defer func() {
 		require.NoError(t, fs.Close(), "failed to close file saver")
 	}()
@@ -154,7 +155,7 @@ func TestFileSaver_SaveBatch(t *testing.T) {
 	}
 
 	memStorage := mstorage.NewMemStorage()
-	fs := NewFileSaver(context.Background(), config, memStorage)
+	fs := NewFileSaver(context.Background(), config, memStorage, zap.NewNop().Sugar())
 	defer func() {
 		require.NoError(t, fs.Close(), "failed to close file saver")
 	}()
@@ -196,7 +197,7 @@ func TestFileSaver_SaveBatch(t *testing.T) {
 
 	// Create a new FileSaver to test restoration
 	newMemStorage := mstorage.NewMemStorage()
-	newFs := NewFileSaver(context.Background(), config, newMemStorage)
+	newFs := NewFileSaver(context.Background(), config, newMemStorage, zap.NewNop().Sugar())
 	defer func() {
 		require.NoError(t, newFs.Close(), "failed to close file saver")
 	}()

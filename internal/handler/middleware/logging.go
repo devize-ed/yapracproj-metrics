@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"go.uber.org/zap"
 )
 
 type (
@@ -34,34 +34,36 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 }
 
 // MiddlewareLogging is a middleware for logging HTTP requests (URI, method, processing time, response status, size)
-func MiddlewareLogging(h http.Handler) http.Handler {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
+func MiddlewareLogging(logger *zap.SugaredLogger) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		logFn := func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
 
-		responseData := &responseData{
-			status: 0,
-			size:   0,
+			responseData := &responseData{
+				status: 0,
+				size:   0,
+			}
+
+			lw := loggingResponseWriter{
+				ResponseWriter: w,
+				responseData:   responseData,
+			}
+			h.ServeHTTP(&lw, r)
+
+			duration := time.Since(start)
+
+			logger.Infow("Request info:",
+				"uri", r.RequestURI,
+				"method", r.Method,
+				"duration", duration,
+			)
+
+			logger.Infow("Response info:",
+				"status", responseData.status,
+				"size", responseData.size,
+			)
+
 		}
-
-		lw := loggingResponseWriter{
-			ResponseWriter: w,
-			responseData:   responseData,
-		}
-		h.ServeHTTP(&lw, r)
-
-		duration := time.Since(start)
-
-		logger.Log.Infow("Request info:",
-			"uri", r.RequestURI,
-			"method", r.Method,
-			"duration", duration,
-		)
-
-		logger.Log.Infow("Response info:",
-			"status", responseData.status,
-			"size", responseData.size,
-		)
-
+		return http.HandlerFunc(logFn)
 	}
-	return http.HandlerFunc(logFn)
 }

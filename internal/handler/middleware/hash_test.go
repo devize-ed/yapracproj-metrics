@@ -13,8 +13,11 @@ import (
 )
 
 func TestHashMiddleware(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	requestBody := `{
 		"id":"LastGC",
@@ -30,7 +33,7 @@ func TestHashMiddleware(t *testing.T) {
 	})
 
 	router := chi.NewRouter()
-	router.Use(HashMiddleware(key))
+	router.Use(HashMiddleware(key, logger))
 	router.Post("/", successHandler)
 
 	srv := httptest.NewServer(router)

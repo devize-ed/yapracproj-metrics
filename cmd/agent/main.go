@@ -27,17 +27,22 @@ func run() error {
 		return fmt.Errorf("failed to get agent config: %w", err)
 	}
 	// Initialize the logger with the configuration.
-	if err := logger.Initialize(cfg.LogLevel); err != nil {
+	logger, err := logger.Initialize(cfg.LogLevel)
+	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer logger.SafeSync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			log.Fatalf("failed to sync logger: %v", err)
+		}
+	}()
 
 	// Log the agent start information.
-	logger.Log.Infof("Agent config: %+v", cfg)
+	logger.Infof("Agent config: %+v", cfg)
 
 	client := resty.New() // Initialize HTTP client.
 
-	a := agent.NewAgent(client, cfg) // Create a new agent instance.
+	a := agent.NewAgent(client, cfg, logger) // Create a new agent instance.
 
 	// Create a context that listens for OS signals to shut down the agent.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

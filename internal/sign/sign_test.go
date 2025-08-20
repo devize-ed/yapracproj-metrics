@@ -6,13 +6,10 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHash(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
 
 	type args struct {
 		data []byte
@@ -49,8 +46,6 @@ func TestHash(t *testing.T) {
 }
 
 func TestVerify(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
 
 	type args struct {
 		data []byte
@@ -58,9 +53,10 @@ func TestVerify(t *testing.T) {
 		hash string
 	}
 	tests := []struct {
-		name string
-		args args
-		want bool
+		name    string
+		args    args
+		want    bool
+		wantErr bool
 	}{
 		{
 			name: "verify_correct",
@@ -69,7 +65,8 @@ func TestVerify(t *testing.T) {
 				key:  "test_key",
 				hash: Hash([]byte("test_data"), "test_key"),
 			},
-			want: true,
+			want:    true,
+			wantErr: false,
 		},
 		{
 			name: "verify_wrong",
@@ -78,13 +75,18 @@ func TestVerify(t *testing.T) {
 				key:  "test_key",
 				hash: hex.EncodeToString([]byte("wrong_hash")),
 			},
-			want: false,
+			want:    false,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ok, err := Verify(tt.args.data, tt.args.key, tt.args.hash)
-			assert.NoError(t, err)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.Equal(t, tt.want, ok)
 		})
 	}

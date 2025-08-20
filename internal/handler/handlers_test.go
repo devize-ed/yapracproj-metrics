@@ -17,15 +17,15 @@ func testMemoryStorage(t *testing.T, ms *mstorage.MemStorage) {
 	ctx := context.Background()
 	delta := int64(5)
 	if err := ms.AddCounter(ctx, "testCounter", &delta); err != nil {
-		t.Fatalf("Failed to add counter: %w", err)
+		t.Fatalf("Failed to add counter: %v", err)
 	}
 	g1 := 10.5
 	if err := ms.SetGauge(ctx, "testGauge1", &g1); err != nil {
-		t.Fatalf("Failed to set gauge: %w", err)
+		t.Fatalf("Failed to set gauge: %v", err)
 	}
 	g2 := 1.5
 	if err := ms.SetGauge(ctx, "testGauge2", &g2); err != nil {
-		t.Fatalf("Failed to set gauge: %w", err)
+		t.Fatalf("Failed to set gauge: %v", err)
 	}
 }
 
@@ -40,11 +40,14 @@ func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp 
 }
 
 func TestUpdateHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "")
+	h := NewHandler(ms, "", logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -79,11 +82,14 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestListAllHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "")
+	h := NewHandler(ms, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -109,11 +115,14 @@ func TestListAllHandler(t *testing.T) {
 }
 
 func TestGetMetricHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "")
+	h := NewHandler(ms, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()

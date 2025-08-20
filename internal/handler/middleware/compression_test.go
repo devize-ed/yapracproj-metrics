@@ -14,8 +14,11 @@ import (
 )
 
 func TestMiddlewareGzip(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.SafeSync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	requestBody := `{
 		"id":"LastGC",
@@ -34,7 +37,7 @@ func TestMiddlewareGzip(t *testing.T) {
 	})
 
 	router := chi.NewRouter()
-	router.Use(MiddlewareGzip)
+	router.Use(MiddlewareGzip(logger))
 	router.Post("/", successHandler)
 
 	srv := httptest.NewServer(router)

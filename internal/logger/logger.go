@@ -9,14 +9,11 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Singleton logger instance.
-var Log *zap.SugaredLogger = zap.NewNop().Sugar()
-
 // Initialize singleton logger.
-func Initialize(level string) error {
+func Initialize(level string) (*zap.SugaredLogger, error) {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cfg := zap.NewDevelopmentConfig()
@@ -33,18 +30,17 @@ func Initialize(level string) error {
 		zap.AddCaller(),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	Log = zl.Sugar()
-	return nil
+	return zl.Sugar(), nil
 }
 
-func SafeSync() {
-	if Log == nil {
+func SafeSync(logger *zap.SugaredLogger) {
+	if logger == nil {
 		return
 	}
-	if err := Log.Sync(); err != nil {
+	if err := logger.Sync(); err != nil {
 		var pe *os.PathError
 		if errors.As(err, &pe) && (errors.Is(pe.Err, syscall.EINVAL) || errors.Is(pe.Err, syscall.ENOTTY)) {
 			return
@@ -52,6 +48,6 @@ func SafeSync() {
 		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTTY) {
 			return
 		}
-		Log.Errorf("failed to sync logger: %w", err)
+		logger.Errorf("failed to sync logger: %w", err)
 	}
 }
