@@ -3,8 +3,10 @@ package agent
 import (
 	"math/rand/v2"
 	"runtime"
+	"sync"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"github.com/shirou/gopsutil/v4/mem"
+	"go.uber.org/zap"
 )
 
 // Metric types for the agent storage
@@ -20,23 +22,45 @@ type MetricValue interface {
 
 // AgentStorage holds the metrics collected by the agent.
 type AgentStorage struct {
+	mu       sync.RWMutex
 	Counters map[string]Counter
 	Gauges   map[string]Gauge
+	logger   *zap.SugaredLogger
 }
 
 // NewAgentStorage initializes a new AgentStorage instance with empty maps for counters and gauges.
-func NewAgentStorage() *AgentStorage {
+func NewAgentStorage(logger *zap.SugaredLogger) *AgentStorage {
 	return &AgentStorage{
 		Counters: make(map[string]Counter),
 		Gauges:   make(map[string]Gauge),
+		logger:   logger,
 	}
 }
 
-// CollectMetrics collects and store metrics.
-func (s *AgentStorage) CollectMetrics() {
-	logger.Log.Debug("Collecting metrics")
-	s.collectRuntimeMetrics()
-	s.collectAdditionalMetrics()
+// collectMetrics collects and store metrics.
+func (s *AgentStorage) collectMetrics() {
+	var wg sync.WaitGroup
+
+	s.logger.Debug("Collecting metrics")
+	// Collect runtime metrics.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.collectRuntimeMetrics()
+	}()
+	// Collect additional metrics.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.collectAdditionalMetrics()
+	}()
+	// Collect system metrics.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.collectSystemMetrics()
+	}()
+	wg.Wait()
 }
 
 // collectRuntimeMetrics collects runtime metrics and stores them in the agent storage.
@@ -45,6 +69,7 @@ func (s *AgentStorage) collectRuntimeMetrics() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	s.mu.Lock()
 	// Store metrics to storage.
 	s.Gauges["Alloc"] = Gauge(m.Alloc)
 	s.Gauges["BuckHashSys"] = Gauge(m.BuckHashSys)
@@ -73,10 +98,26 @@ func (s *AgentStorage) collectRuntimeMetrics() {
 	s.Gauges["StackSys"] = Gauge(m.StackSys)
 	s.Gauges["Sys"] = Gauge(m.Sys)
 	s.Gauges["TotalAlloc"] = Gauge(m.TotalAlloc)
+	s.mu.Unlock()
 }
 
 // collectAdditionalMetrics adds additional metrics to the agent storage.
 func (s *AgentStorage) collectAdditionalMetrics() {
+	s.mu.Lock()
 	s.Counters["PollCount"]++                       // Increment the poll count
 	s.Gauges["RandomValue"] = Gauge(rand.Float64()) // Add a random value to the metrics.
+	s.mu.Unlock()
+}
+
+// collectSystemMetrics collects system metrics and stores them in the agent storage.
+func (s *AgentStorage) collectSystemMetrics() {
+	m, err := mem.VirtualMemory()
+	if err != nil {
+		s.logger.Error("Error collecting system metrics: ", err)
+	}
+	s.mu.Lock()
+	s.Gauges["TotalMemory"] = Gauge(m.Total)
+	s.Gauges["FreeMemory"] = Gauge(m.Free)
+	s.Gauges["CPUutilization1"] = Gauge(m.UsedPercent)
+	s.mu.Unlock()
 }

@@ -5,5 +5,5 @@ type AgentConfig struct {
 	ReportInterval int  `env:"REPORT_INTERVAL"`
 	EnableGzip     bool `env:"ENABLE_GZIP"`        // Enable gzip compression for requests.
 	EnableTestGet  bool `env:"ENABLE_GET_METRICS"` // Enable test retrieval of metrics from the server.
-
+	RateLimit      int  `env:"RATE_LIMIT"`
 }

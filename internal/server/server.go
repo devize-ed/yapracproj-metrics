@@ -9,19 +9,21 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"go.uber.org/zap"
 )
 
 // Server wraps an *http.Server and adds storage and configuration.
 type Server struct {
 	*http.Server
-	cfg config.ServerConfig
+	cfg    config.ServerConfig
+	logger *zap.SugaredLogger
 }
 
 // NewServer constructs the HTTP server using config and storage.
-func NewServer(cfg config.ServerConfig, h *handler.Handler) *Server {
+func NewServer(cfg config.ServerConfig, h *handler.Handler, logger *zap.SugaredLogger) *Server {
 	s := &Server{
-		cfg: cfg,
+		cfg:    cfg,
+		logger: logger,
 	}
 	s.Server = &http.Server{
 		Addr:    cfg.Connection.Host,
@@ -40,18 +42,18 @@ func (s *Server) Serve(ctx context.Context) error {
 	// Start the HTTP server in a goroutine.
 	go func() {
 		// Setart the server and listen for incoming requests.
-		logger.Log.Infof("HTTP server listening on %s", s.cfg.Connection.Host)
+		s.logger.Infof("HTTP server listening on %s", s.cfg.Connection.Host)
 		if err := s.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
-			logger.Log.Errorf("listen error: %v", err)
+			s.logger.Errorf("listen error: %w", err)
 		} else {
-			logger.Log.Debug("HTTP server closed")
+			s.logger.Debug("HTTP server closed")
 		}
 	}()
 
 	// Wait for shutdown signal.
 	<-ctx.Done()
-	logger.Log.Info("Stop signal received, shutting down the server...")
+	s.logger.Info("Stop signal received, shutting down the server...")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

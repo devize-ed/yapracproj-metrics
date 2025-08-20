@@ -1,66 +1,30 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
-	repository "github.com/devize-ed/yapracproj-metrics.git/internal/repository"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/db"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage"
-	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
-
-type Repository interface {
-	// SetGauge sets a gauge metric with the given name and value.
-	SetGauge(ctx context.Context, name string, value *float64) error
-	// GetGauge retrieves the value of a gauge metric by its name.
-	GetGauge(ctx context.Context, name string) (*float64, error)
-	// AddCounter increments a counter metric by the given delta.
-	AddCounter(ctx context.Context, name string, delta *int64) error
-	// GetCounter retrieves the value of a counter metric by its name.
-	GetCounter(ctx context.Context, name string) (*int64, error)
-	// GetAll returns all available metrics
-	GetAll(ctx context.Context) (map[string]string, error)
-	// SaveBatch saves a batch of metrics to the repository.
-	SaveBatch(ctx context.Context, batch []models.Metrics) error
-	// Ping checks the connection to the repository.
-	Ping(ctx context.Context) error
-	// Close closes the repository.
-	Close() error
-}
-
-func NewRepository(ctx context.Context, config repository.RepositoryConfig) Repository {
-	if config.DBConfig.DatabaseDSN != "" {
-		logger.Log.Info("Using database storage")
-		db, err := db.NewDB(ctx, &config.DBConfig)
-		if err != nil {
-			logger.Log.Errorf("failed to create repository: %v", err)
-		}
-		return db
-	} else if config.FSConfig.FPath != "" {
-		logger.Log.Info("Using file storage")
-		return fstorage.NewFileSaver(ctx, &config.FSConfig, mstorage.NewMemStorage())
-	} else {
-		logger.Log.Info("Using in-memory storage")
-		return mstorage.NewMemStorage()
-	}
-}
 
 // Handler wraps the storage.
 type Handler struct {
-	storage Repository
+	storage repository.Repository
+	hashKey string
+	logger  *zap.SugaredLogger
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r Repository) *Handler {
+func NewHandler(r repository.Repository, key string, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		storage: r,
+		hashKey: key,
+		logger:  logger,
 	}
 }
 
@@ -75,7 +39,7 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 		// Handle different metric types, if unknown -> response as http.StatusBadRequest.
 		switch chi.URLParam(r, "metricType") {
 		case models.Counter:
-			logger.Log.Debug("Counter:", metricName, metricValue)
+			h.logger.Debug("Counter:", metricName, metricValue)
 			// Convert string value from url and save in the storage.
 			val, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
@@ -83,14 +47,14 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				return
 			}
 			if err := h.storage.AddCounter(r.Context(), metricName, &val); err != nil {
-				logger.Log.Error("Failed to add counter:", err)
+				h.logger.Error("Failed to add counter:", err)
 				http.Error(w, "Failed to add counter", http.StatusInternalServerError)
 				return
 			}
-			logger.Log.Debugf("Counter %s increased by %d\n", metricName, val)
+			h.logger.Debugf("Counter %s increased by %d\n", metricName, val)
 
 		case models.Gauge:
-			logger.Log.Debug("Gauge", metricName, metricValue)
+			h.logger.Debug("Gauge", metricName, metricValue)
 			// Convert string value from url and save in the storage.
 			val, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
@@ -98,15 +62,15 @@ func (h *Handler) UpdateMetricHandler() http.HandlerFunc {
 				return
 			}
 			if err := h.storage.SetGauge(r.Context(), metricName, &val); err != nil {
-				logger.Log.Error("Failed to set gauge:", err)
+				h.logger.Error("Failed to set gauge:", err)
 				http.Error(w, "Failed to set gauge", http.StatusInternalServerError)
 				return
 			}
-			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, val)
+			h.logger.Debugf("Gauge %s updated to %f\n", metricName, val)
 
 		default:
 			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Debug("Request invalid metric type: ", metricType)
+			h.logger.Debug("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
@@ -135,7 +99,7 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			if err == nil {
 				val = []byte(strconv.FormatInt(*got, 10))
 			} else {
-				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				h.logger.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
@@ -145,14 +109,14 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 			if err == nil {
 				val = []byte(strconv.FormatFloat(*got, 'f', -1, 64))
 			} else {
-				logger.Log.Error("Requested metric not found: ", r.URL.Path)
+				h.logger.Error("Requested metric not found: ", r.URL.Path)
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
 			}
 
 		default:
 			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Error("Request invalid metric type: ", metricType)
+			h.logger.Error("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
@@ -160,7 +124,7 @@ func (h *Handler) GetMetricHandler() http.HandlerFunc {
 		// Write response
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if _, err := w.Write(val); err != nil {
-			logger.Log.Debug("Failed to write response:", err)
+			h.logger.Debug("Failed to write response:", err)
 		}
 	}
 }
@@ -171,7 +135,7 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 		// Get the map with all the metrics from the storage.
 		metrics, err := h.storage.GetAll(r.Context())
 		if err != nil {
-			logger.Log.Error("Failed to get all metrics:", err)
+			h.logger.Error("Failed to get all metrics:", err)
 			http.Error(w, "Failed to get all metrics", http.StatusInternalServerError)
 			return
 		}
@@ -186,7 +150,7 @@ func (h *Handler) ListMetricsHandler() http.HandlerFunc {
 		// Write the metrics to the response.
 		for _, k := range keys {
 			if _, err := fmt.Fprintf(w, "%s = %s\n", k, metrics[k]); err != nil {
-				logger.Log.Debug("Failed to write metric:", err)
+				h.logger.Debug("Failed to write metric:", err)
 			}
 		}
 	}

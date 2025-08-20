@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	cfg "github.com/devize-ed/yapracproj-metrics.git/internal/repository/fstorage/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
+	"go.uber.org/zap"
 )
 
 // FileSaver is a struct that implements the Repository interface for saving metrics to a file.
@@ -25,10 +25,11 @@ type FileSaver struct {
 	mu       sync.RWMutex
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
+	logger   *zap.SugaredLogger
 }
 
 // NewFileSaver constructs a new FileSaver with the provided file name.
-func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *mstorage.MemStorage) *FileSaver {
+func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *mstorage.MemStorage, logger *zap.SugaredLogger) *FileSaver {
 	// Create the context that will be used to close the interval saver.
 	fsCtx, cancel := context.WithCancel(ctx)
 
@@ -38,6 +39,7 @@ func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *msto
 		fname:      config.FPath,
 		syncSave:   config.StoreInterval == 0, // if the interval is 0, saves synchronously
 		cancel:     cancel,
+		logger:     logger,
 	}
 
 	// If the interval is not 0, start the interval saver.
@@ -49,7 +51,7 @@ func NewFileSaver(ctx context.Context, config *cfg.FStorageConfig, storage *msto
 	// If the restore is set, restore the metrics from the file.
 	if config.Restore {
 		if err := fs.restoreFromFile(ctx); err != nil {
-			logger.Log.Errorf("failed to restore metrics from file: %v", err)
+			fs.logger.Errorf("failed to restore metrics from file: %w", err)
 		}
 	}
 
@@ -125,7 +127,7 @@ func (f *FileSaver) GetCounter(ctx context.Context, name string) (*int64, error)
 
 // SaveBatch saves a batch of metrics to the repository.
 func (f *FileSaver) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
-	logger.Log.Debugf("saving metrics to %s", f.fname)
+	f.logger.Debugf("saving metrics to %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {
 		return nil
@@ -159,7 +161,7 @@ func (f *FileSaver) SaveBatch(ctx context.Context, metrics []models.Metrics) err
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 	// Write the data to the file.
-	if err := writeFileWithRetries(ctx, f.fname, data); err != nil {
+	if err := writeFileWithRetries(ctx, f.fname, data, f.logger); err != nil {
 		return fmt.Errorf("failed to save metrics to file: %w", err)
 	}
 
@@ -171,11 +173,11 @@ func (f *FileSaver) SaveBatch(ctx context.Context, metrics []models.Metrics) err
 	}
 	f.mu.Unlock()
 
-	logger.Log.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
+	f.logger.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
 	return nil
 }
 
-func writeFileWithRetries(ctx context.Context, fname string, data []byte) error {
+func writeFileWithRetries(ctx context.Context, fname string, data []byte, logger *zap.SugaredLogger) error {
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
 
 	for attempt := 1; attempt <= len(backoffs)+1; attempt++ {
@@ -183,7 +185,7 @@ func writeFileWithRetries(ctx context.Context, fname string, data []byte) error 
 			if attempt == len(backoffs)+1 {
 				return err
 			}
-			logger.Log.Debugf("write file failed, attempt %d: %v", attempt, err)
+			logger.Debugf("write file failed, attempt %d: %v", attempt, err)
 			select {
 			case <-time.After(backoffs[attempt-1]):
 				continue
@@ -198,7 +200,7 @@ func writeFileWithRetries(ctx context.Context, fname string, data []byte) error 
 
 // Load reads the metrics from the specified file and restores them to the storage.
 func (f *FileSaver) restoreFromFile(ctx context.Context) error {
-	logger.Log.Debugf("loading metrics from %s", f.fname)
+	f.logger.Debugf("loading metrics from %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {
 		return nil
@@ -212,7 +214,7 @@ func (f *FileSaver) restoreFromFile(ctx context.Context) error {
 
 	// Check if the data is empty.
 	if len(data) == 0 {
-		logger.Log.Warn("storage empty")
+		f.logger.Warn("storage empty")
 		return nil
 	}
 
@@ -224,7 +226,7 @@ func (f *FileSaver) restoreFromFile(ctx context.Context) error {
 
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			logger.Log.Warnf("data storage error: %v", err)
+			f.logger.Warnf("data storage error: %w", err)
 			return nil
 		}
 		return fmt.Errorf("error unmarshal metrics: %w", err)
@@ -235,12 +237,12 @@ func (f *FileSaver) restoreFromFile(ctx context.Context) error {
 	f.Counter = tmp.Counter
 	f.mu.Unlock()
 
-	logger.Log.Debugf("metrics restored from %s", f.fname)
+	f.logger.Debugf("metrics restored from %s", f.fname)
 	return nil
 }
 
 func (f *FileSaver) saveToFile(ctx context.Context) error {
-	logger.Log.Debugf("saving metrics to %s", f.fname)
+	f.logger.Debugf("saving metrics to %s", f.fname)
 	// Check if the file name is empty -> not saving (used in tests).
 	if f.fname == "" {
 		return nil
@@ -260,10 +262,10 @@ func (f *FileSaver) saveToFile(ctx context.Context) error {
 		return err
 	}
 	// Write the data to the file.
-	if err := writeFileWithRetries(ctx, f.fname, data); err != nil {
+	if err := writeFileWithRetries(ctx, f.fname, data, f.logger); err != nil {
 		return err
 	}
-	logger.Log.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
+	f.logger.Debugf("metrics saved (%d bytes) to %s", len(data), f.fname)
 	return nil
 }
 
@@ -277,10 +279,10 @@ func (f *FileSaver) intervalSaver(ctx context.Context, interval int) {
 		select {
 		case <-ticker.C:
 			if err := f.saveToFile(ctx); err != nil {
-				logger.Log.Errorf("periodic save failed: %v", err)
+				f.logger.Errorf("periodic save failed: %w", err)
 			}
 		case <-ctx.Done():
-			logger.Log.Debug("Interval saver stopping, performing final save")
+			f.logger.Debug("Interval saver stopping, performing final save")
 			return
 		}
 	}

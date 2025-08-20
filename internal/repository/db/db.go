@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	cfg "github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository/db/migrations"
@@ -15,15 +14,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type DB struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	logger *zap.SugaredLogger
 }
 
 // NewDB provides the new data base connection with the provided configuration.
-func NewDB(ctx context.Context, cfg *cfg.DBConfig) (*DB, error) {
-	logger.Log.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
+func NewDB(ctx context.Context, cfg *cfg.DBConfig, logger *zap.SugaredLogger) (*DB, error) {
+	logger.Debugf("Connecting to database with DSN: %s", cfg.DatabaseDSN)
 
 	// Run migrations before establishing the connection
 	if err := migrations.RunMigrations(cfg.DatabaseDSN, true); err != nil {
@@ -31,17 +32,20 @@ func NewDB(ctx context.Context, cfg *cfg.DBConfig) (*DB, error) {
 	}
 
 	// Initialize a new connection pool with the provided DSN
-	pool, err := initPool(ctx, cfg.DatabaseDSN)
+	pool, err := initPool(ctx, cfg.DatabaseDSN, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise a connection pool: %w", err)
 	}
 
-	logger.Log.Debug("Database connection established successfully")
-	return &DB{pool: pool}, nil
+	logger.Debug("Database connection established successfully")
+	return &DB{
+		pool:   pool,
+		logger: logger,
+	}, nil
 }
 
 // initPool initializes a new connection pool.
-func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+func initPool(ctx context.Context, dsn string, logger *zap.SugaredLogger) (*pgxpool.Pool, error) {
 	// Parse the DSN and create a new connection pool with tracing enabled
 	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -49,7 +53,7 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	}
 
 	// Set the connection pool configuration
-	poolCfg.ConnConfig.Tracer = &queryTracer{}
+	poolCfg.ConnConfig.Tracer = &queryTracer{logger: logger}
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize a connection pool: %w", err)
@@ -64,7 +68,7 @@ func initPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 // AddCounter adds the counter to the database.
 func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
-	logger.Log.Debug("Saving counter to the database")
+	db.logger.Debug("Saving counter to the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -73,7 +77,7 @@ func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -89,7 +93,7 @@ func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
 	}
 
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return fmt.Errorf("commit error: %w", err)
 	}
 	return nil
@@ -97,7 +101,7 @@ func (db *DB) AddCounter(ctx context.Context, id string, delta *int64) error {
 
 // GetCounter gets the counter from the database.
 func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
-	logger.Log.Debug("Get counter from the database")
+	db.logger.Debug("Get counter from the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -106,7 +110,7 @@ func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -122,7 +126,7 @@ func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
 	}
 
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return nil, fmt.Errorf("commit error: %w", err)
 	}
 	return &delta, nil
@@ -130,7 +134,7 @@ func (db *DB) GetCounter(ctx context.Context, id string) (*int64, error) {
 
 // SetGauge sets the gauge to the database.
 func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
-	logger.Log.Debug("Saving gauge to the database")
+	db.logger.Debug("Saving gauge to the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -140,7 +144,7 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -156,7 +160,7 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 
 	}
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return fmt.Errorf("commit error: %w", err)
 	}
 	return nil
@@ -164,7 +168,7 @@ func (db *DB) SetGauge(ctx context.Context, id string, value *float64) error {
 
 // GetGauge gets the gauge from the database.
 func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
-	logger.Log.Debug("Getting gauge from the database")
+	db.logger.Debug("Getting gauge from the database")
 	// Begin a transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -173,7 +177,7 @@ func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -189,7 +193,7 @@ func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 	}
 
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return nil, fmt.Errorf("commit error: %w", err)
 	}
 	return &value, nil
@@ -197,7 +201,7 @@ func (db *DB) GetGauge(ctx context.Context, id string) (*float64, error) {
 
 // SaveBatch saves a batch of metrics to the database.
 func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
-	logger.Log.Debug("Saving batch to the database")
+	db.logger.Debug("Saving batch to the database")
 	// Check if the batch is empty
 	if len(metrics) == 0 {
 		return fmt.Errorf("failed to save batch: empty slice")
@@ -210,7 +214,7 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -247,7 +251,7 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 	}
 
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return fmt.Errorf("commit error: %w", err)
 	}
 	return nil
@@ -255,7 +259,7 @@ func (db *DB) SaveBatch(ctx context.Context, metrics []models.Metrics) error {
 
 // GetAll reads the metrics from the database.
 func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
-	logger.Log.Debug("Loading metrics from the database")
+	db.logger.Debug("Loading metrics from the database")
 	tx, err := db.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -263,7 +267,7 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
-				logger.Log.Errorf("failed to rollback transaction: %v", rbErr)
+				db.logger.Errorf("failed to rollback transaction: %v", rbErr)
 			}
 		}
 	}()
@@ -306,10 +310,10 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 	}
 
 	// Commit the transaction
-	if err := commitWithRetries(ctx, tx); err != nil {
+	if err := commitWithRetries(ctx, tx, db.logger); err != nil {
 		return nil, fmt.Errorf("commit error: %w", err)
 	}
-	logger.Log.Debugf("metrics restored from the database: %d gauges, %d counters", len(gauge), len(counter))
+	db.logger.Debugf("metrics restored from the database: %d gauges, %d counters", len(gauge), len(counter))
 	result := make(map[string]string)
 	for k, v := range gauge {
 		result[k] = strconv.FormatFloat(v, 'f', -1, 64)
@@ -321,11 +325,11 @@ func (db *DB) GetAll(ctx context.Context) (map[string]string, error) {
 }
 
 func (db *DB) Ping(ctx context.Context) error {
-	logger.Log.Debug("Pinging the database")
+	db.logger.Debug("Pinging the database")
 	if err := db.pool.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping the database: %w", err)
 	}
-	logger.Log.Debug("Database is connected")
+	db.logger.Debug("Database is connected")
 	return nil
 }
 
@@ -335,7 +339,7 @@ func (db *DB) Close() error {
 	return nil
 }
 
-func commitWithRetries(ctx context.Context, tx pgx.Tx) error {
+func commitWithRetries(ctx context.Context, tx pgx.Tx, logger *zap.SugaredLogger) error {
 	// Define backoff durations for retries
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}
 
@@ -346,7 +350,7 @@ func commitWithRetries(ctx context.Context, tx pgx.Tx) error {
 			if !isErrorRetriable(err) || attempt == len(backoffs)+1 {
 				return fmt.Errorf("commit (attempt %d): %w", attempt, err)
 			}
-			logger.Log.Debugf("commit failed, attempt %d: %v", attempt, err)
+			logger.Debugf("commit failed, attempt %d: %v", attempt, err)
 			// if the error is retriable, wait for the backoff duration and retry
 			select {
 			case <-time.After(backoffs[attempt-1]):

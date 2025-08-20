@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"go.uber.org/zap"
 )
@@ -15,15 +14,15 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Decode request body into model struct.
-		logger.Log.Debug("Decoding request JSON body")
+		h.logger.Debug("Decoding request JSON body")
 		body := &models.Metrics{}
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(body); err != nil {
-			logger.Log.Debug("Cannot decode request JSON body", zap.Error(err))
+			h.logger.Debug("Cannot decode request JSON body", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
+		h.logger.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 		// Get parameters.
 		metricName := body.ID
 		metricType := body.MType
@@ -39,11 +38,11 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 			}
 
 			if err := h.storage.AddCounter(r.Context(), metricName, &metricValue); err != nil {
-				logger.Log.Error("Failed to add counter:", err)
+				h.logger.Error("Failed to add counter:", err)
 				http.Error(w, "Failed to add counter", http.StatusInternalServerError)
 				return
 			}
-			logger.Log.Debugf("Counter %s increased by %d\n", metricName, metricValue)
+			h.logger.Debugf("Counter %s increased by %d\n", metricName, metricValue)
 
 		case models.Gauge:
 			var metricValue float64
@@ -54,15 +53,15 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 				return
 			}
 			if err := h.storage.SetGauge(r.Context(), metricName, &metricValue); err != nil {
-				logger.Log.Error("Failed to set gauge:", err)
+				h.logger.Error("Failed to set gauge:", err)
 				http.Error(w, "Failed to set gauge", http.StatusInternalServerError)
 				return
 			}
-			logger.Log.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
+			h.logger.Debugf("Gauge %s updated to %f\n", metricName, metricValue)
 
 		default:
 			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Debug("Request invalid metric type: ", metricType)
+			h.logger.Debug("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
@@ -79,15 +78,15 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Decode request body into model struct.
-		logger.Log.Debug("Decoding request JSON body")
+		h.logger.Debug("Decoding request JSON body")
 		body := &models.Metrics{}
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(body); err != nil {
-			logger.Log.Debug("Cannot decode request JSON body:", zap.Error(err))
+			h.logger.Debug("Cannot decode request JSON body:", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logger.Log.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
+		h.logger.Debugf("req body: ID = %s, MType = %s, Delta = %v, Value = %v", body.ID, body.MType, body.Delta, body.Value)
 
 		// Get parameters.
 		metricName := body.ID
@@ -101,10 +100,10 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 			if err == nil {
 				body.Delta = got
 			} else {
-				logger.Log.Error("Requested metric not found: ", metricName)
+				h.logger.Error("Requested metric not found: ", metricName)
 				metrics, err := h.storage.GetAll(r.Context())
 				if err == nil {
-					logger.Log.Debugln("Available metrics: ", metrics)
+					h.logger.Debugln("Available metrics: ", metrics)
 				}
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
@@ -115,10 +114,10 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 			if err == nil {
 				body.Value = got
 			} else {
-				logger.Log.Error("Requested metric not found: ", metricName)
+				h.logger.Error("Requested metric not found: ", metricName)
 				metrics, err := h.storage.GetAll(r.Context())
 				if err == nil {
-					logger.Log.Debugln("Available metrics: ", metrics)
+					h.logger.Debugln("Available metrics: ", metrics)
 				}
 				http.Error(w, "metric not found", http.StatusNotFound)
 				return
@@ -126,7 +125,7 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 
 		default:
 			// If metric type is unknown, return http.StatusBadRequest.
-			logger.Log.Error("Request invalid metric type: ", metricType)
+			h.logger.Error("Request invalid metric type: ", metricType)
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
@@ -134,7 +133,7 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 		// Write response.
 		resp, err := json.Marshal(body)
 		if err != nil {
-			logger.Log.Debug("Cannot encode response JSON:", err)
+			h.logger.Debug("Cannot encode response JSON:", err)
 			http.Error(w, "Cannot encode response JSON", http.StatusInternalServerError)
 			return
 		}
@@ -142,7 +141,7 @@ func (h *Handler) GetMetricJSONHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(resp); err != nil {
-			logger.Log.Debug("Failed to write response body:", err)
+			h.logger.Debug("Failed to write response body:", err)
 		}
 	}
 }
@@ -154,18 +153,18 @@ func (h *Handler) UpdateBatchHandler() http.HandlerFunc {
 
 		var metrics []models.Metrics
 		if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
-			logger.Log.Debug("Cannot decode request JSON body", zap.Error(err))
+			h.logger.Debug("Cannot decode request JSON body", zap.Error(err))
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 
 		if err := h.storage.SaveBatch(r.Context(), metrics); err != nil {
-			logger.Log.Error("failed to save batch", zap.Error(err))
+			h.logger.Error("failed to save batch", zap.Error(err))
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		logger.Log.Debug("Saved batch of metrics", zap.Any("batch", metrics))
+		h.logger.Debug("Saved batch of metrics", zap.Any("batch", metrics))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}

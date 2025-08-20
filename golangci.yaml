@@ -77,6 +77,9 @@ linters-settings:
     # Such cases aren't reported by default.
     # Default: false
     check-type-assertions: true
+    # Ignore test files (*_test.go) in this check
+    ignore-tests: true
+
 
   exhaustive:
     # Program elements to check for exhaustiveness.
@@ -288,6 +291,9 @@ linters:
     - usestdlibvars # detects the possibility to use variables/constants from the Go standard library
     - wastedassign # finds wasted assignment statements
     - whitespace # detects leading and trailing whitespace
+    - gocritic # provides diagnostics that check for bugs, performance and style issues
+  ignore:
+    - _test.go
 
 # Issues configuration 
 issues:

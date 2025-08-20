@@ -40,11 +40,14 @@ func testRequest(t *testing.T, srv *httptest.Server, method, path string) (resp 
 }
 
 func TestUpdateHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "", logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -79,11 +82,14 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestListAllHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -109,11 +115,14 @@ func TestListAllHandler(t *testing.T) {
 }
 
 func TestGetMetricHandler(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms)
+	h := NewHandler(ms, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()

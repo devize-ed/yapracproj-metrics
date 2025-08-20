@@ -101,7 +101,7 @@ func runMain(m *testing.M) (int, error) {
 
 	defer func() {
 		if err := pool.Purge(pg); err != nil {
-			log.Printf("failed to purge the postgres container: %v", err)
+			log.Printf("failed to purge the postgres container: %w", err)
 		}
 	}()
 
@@ -125,7 +125,7 @@ func runMain(m *testing.M) (int, error) {
 
 	defer func() {
 		if err := conn.Close(); err != nil {
-			log.Printf("failed to correctly close the connection: %v", err)
+			log.Printf("failed to correctly close the connection: %w", err)
 		}
 	}()
 
@@ -216,7 +216,7 @@ func TestAddCounter(t *testing.T) {
 		DatabaseDSN: getDSN(),
 	})
 	if err != nil {
-		t.Fatalf("failed to create a DB: %v", err)
+		t.Fatalf("failed to create a DB: %w", err)
 	}
 	defer db.Close()
 
@@ -269,7 +269,7 @@ func TestSetGauge(t *testing.T) {
 		DatabaseDSN: getDSN(),
 	})
 	if err != nil {
-		t.Fatalf("failed to create a DB: %v", err)
+		t.Fatalf("failed to create a DB: %w", err)
 	}
 	defer db.Close()
 
@@ -324,7 +324,7 @@ func TestGetGauge(t *testing.T) {
 		DatabaseDSN: getDSN(),
 	})
 	if err != nil {
-		t.Fatalf("failed to create a DB: %v", err)
+		t.Fatalf("failed to create a DB: %w", err)
 	}
 	defer db.Close()
 
@@ -378,7 +378,7 @@ func TestGetCounter(t *testing.T) {
 		DatabaseDSN: getDSN(),
 	})
 	if err != nil {
-		t.Fatalf("failed to create a DB: %v", err)
+		t.Fatalf("failed to create a DB: %w", err)
 	}
 	defer db.Close()
 
@@ -437,7 +437,7 @@ func TestSaveBatchAndGetAll(t *testing.T) {
 		DatabaseDSN: getDSN(),
 	})
 	if err != nil {
-		t.Fatalf("failed to create a DB: %v", err)
+		t.Fatalf("failed to create a DB: %w", err)
 	}
 	defer db.Close()
 

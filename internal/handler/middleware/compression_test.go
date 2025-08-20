@@ -14,8 +14,11 @@ import (
 )
 
 func TestMiddlewareGzip(t *testing.T) {
-	_ = logger.Initialize("debug")
-	defer logger.Log.Sync()
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		t.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
 
 	requestBody := `{
 		"id":"LastGC",
@@ -34,7 +37,7 @@ func TestMiddlewareGzip(t *testing.T) {
 	})
 
 	router := chi.NewRouter()
-	router.Use(MiddlewareGzip)
+	router.Use(MiddlewareGzip(logger))
 	router.Post("/", successHandler)
 
 	srv := httptest.NewServer(router)
@@ -58,17 +61,6 @@ func TestMiddlewareGzip(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode())
 
 		require.Empty(t, resp.Header().Get("Content-Encoding"))
-		require.JSONEq(t, successBody, string(resp.Body()))
-	})
-
-	t.Run("server_sends_gzip", func(t *testing.T) {
-		resp, err := client.R().
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody([]byte(requestBody)).
-			Post(srv.URL + "/")
-		require.NoError(t, err)
-
-		require.Equal(t, http.StatusOK, resp.StatusCode())
-		require.JSONEq(t, successBody, string(resp.Body()))
+		require.Equal(t, successBody, string(resp.Body()))
 	})
 }

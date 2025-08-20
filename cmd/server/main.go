@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,12 +11,13 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
 func main() {
 	if err := run(); err != nil {
-		logger.Log.Fatal(err)
+		log.Fatal(err)
 	}
 }
 
@@ -26,23 +28,27 @@ func run() error {
 		return fmt.Errorf("failed to get server config: %w", err)
 	}
 	// initialize the logger with the specified log level
-	if err := logger.Initialize(cfg.LogLevel); err != nil {
+	logger, err := logger.Initialize(cfg.LogLevel)
+	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer func() {
-		if err := logger.Log.Sync(); err != nil {
-			logger.Log.Errorf("failed to sync logger: %v", err)
+		if err := logger.Sync(); err != nil {
+			logger.Errorf("failed to sync logger: %v", err)
 		}
 	}()
 
 	// Initialize the repository based on the configuration
-	repository := handler.NewRepository(context.Background(), cfg.Repository)
+	repository, err := repository.NewRepository(context.Background(), cfg.Repository, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize repository: %w", err)
+	}
 	if err := repository.Ping(context.Background()); err != nil {
 		return fmt.Errorf("failed to initialize repository: %w", err)
 	}
 	defer func() {
 		if err := repository.Close(); err != nil {
-			logger.Log.Errorf("failed to close repository: %v", err)
+			logger.Errorf("failed to close repository: %w", err)
 		}
 	}()
 
@@ -51,8 +57,8 @@ func run() error {
 	defer stop()
 
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(repository)
-	srv := server.NewServer(cfg, h)
+	h := handler.NewHandler(repository, cfg.Sign.Key, logger)
+	srv := server.NewServer(cfg, h, logger)
 
 	if err = srv.Serve(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)
