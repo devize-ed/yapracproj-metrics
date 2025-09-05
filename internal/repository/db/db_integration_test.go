@@ -19,6 +19,7 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func TestMain(m *testing.M) {
@@ -101,7 +102,7 @@ func runMain(m *testing.M) (int, error) {
 
 	defer func() {
 		if err := pool.Purge(pg); err != nil {
-			log.Printf("failed to purge the postgres container: %w", err)
+			log.Printf("failed to purge the postgres container: %v", err)
 		}
 	}()
 
@@ -125,12 +126,12 @@ func runMain(m *testing.M) (int, error) {
 
 	defer func() {
 		if err := conn.Close(); err != nil {
-			log.Printf("failed to correctly close the connection: %w", err)
+			log.Printf("failed to correctly close the connection: %v", err)
 		}
 	}()
 
 	if err := createTestDB(conn); err != nil {
-		return 1, fmt.Errorf("failed to create a test DB: %w", err)
+		return 1, fmt.Errorf("failed to create a test DB: %v", err)
 	}
 
 	exitCode := m.Run()
@@ -147,7 +148,7 @@ func createTestDB(conn *pgx.Conn) error {
 		),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create a test user: %w", err)
+		return fmt.Errorf("failed to create a test user: %v", err)
 	}
 
 	_, err = conn.Exec(
@@ -162,7 +163,7 @@ func createTestDB(conn *pgx.Conn) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to create a test DB: %w", err)
+		return fmt.Errorf("failed to create a test DB: %v", err)
 	}
 
 	return nil
@@ -177,7 +178,7 @@ func getHostPort(hostPort string) (string, uint16, error) {
 	portStr := hostPortParts[1]
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to cast the port %s to an int: %w", portStr, err)
+		return "", 0, fmt.Errorf("failed to cast the port %s to an int: %v", portStr, err)
 	}
 	return hostPortParts[0], uint16(port), nil
 }
@@ -214,9 +215,9 @@ func TestAddCounter(t *testing.T) {
 
 	db, err := NewDB(context.Background(), &cfg.DBConfig{
 		DatabaseDSN: getDSN(),
-	})
+	}, zap.NewNop().Sugar())
 	if err != nil {
-		t.Fatalf("failed to create a DB: %w", err)
+		t.Fatalf("failed to create a DB: %v", err)
 	}
 	defer db.Close()
 
@@ -267,9 +268,9 @@ func TestSetGauge(t *testing.T) {
 
 	db, err := NewDB(context.Background(), &cfg.DBConfig{
 		DatabaseDSN: getDSN(),
-	})
+	}, zap.NewNop().Sugar())
 	if err != nil {
-		t.Fatalf("failed to create a DB: %w", err)
+		t.Fatalf("failed to create a DB: %v", err)
 	}
 	defer db.Close()
 
@@ -322,9 +323,9 @@ func TestGetGauge(t *testing.T) {
 
 	db, err := NewDB(context.Background(), &cfg.DBConfig{
 		DatabaseDSN: getDSN(),
-	})
+	}, zap.NewNop().Sugar())
 	if err != nil {
-		t.Fatalf("failed to create a DB: %w", err)
+		t.Fatalf("failed to create a DB: %v", err)
 	}
 	defer db.Close()
 
@@ -376,9 +377,9 @@ func TestGetCounter(t *testing.T) {
 
 	db, err := NewDB(context.Background(), &cfg.DBConfig{
 		DatabaseDSN: getDSN(),
-	})
+	}, zap.NewNop().Sugar())
 	if err != nil {
-		t.Fatalf("failed to create a DB: %w", err)
+		t.Fatalf("failed to create a DB: %v", err)
 	}
 	defer db.Close()
 
@@ -435,9 +436,9 @@ func TestSaveBatchAndGetAll(t *testing.T) {
 
 	db, err := NewDB(context.Background(), &cfg.DBConfig{
 		DatabaseDSN: getDSN(),
-	})
+	}, zap.NewNop().Sugar())
 	if err != nil {
-		t.Fatalf("failed to create a DB: %w", err)
+		t.Fatalf("failed to create a DB: %v", err)
 	}
 	defer db.Close()
 
