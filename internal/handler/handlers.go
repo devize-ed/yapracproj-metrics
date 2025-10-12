@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/go-chi/chi"
@@ -16,14 +17,16 @@ import (
 type Handler struct {
 	storage repository.Repository
 	hashKey string
+	auditor *audit.Auditor
 	logger  *zap.SugaredLogger
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r repository.Repository, key string, logger *zap.SugaredLogger) *Handler {
+func NewHandler(r repository.Repository, key string, auditor *audit.Auditor, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		storage: r,
 		hashKey: key,
+		auditor: auditor,
 		logger:  logger,
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
@@ -47,7 +48,8 @@ func TestUpdateHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger)
+	h := NewHandler(ms, "", auditor, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -89,7 +91,8 @@ func TestListAllHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger)
+	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -122,7 +125,8 @@ func TestGetMetricHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger)
+	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()

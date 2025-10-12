@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
@@ -21,7 +22,8 @@ func TestUpdateJsonHandler(t *testing.T) {
 
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger)
+	h := NewHandler(ms, "", auditor, logger)
 
 	r := chi.NewRouter()
 	r.Post(endpoint, h.UpdateMetricJSONHandler())
@@ -76,7 +78,8 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger)
+	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
