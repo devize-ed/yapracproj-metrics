@@ -48,7 +48,7 @@ func TestUpdateHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	auditor := audit.NewAuditor(logger)
+	auditor := audit.NewAuditor(logger, "", "")
 	h := NewHandler(ms, "", auditor, logger)
 
 	r := chi.NewRouter()
@@ -91,7 +91,7 @@ func TestListAllHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	auditor := audit.NewAuditor(logger)
+	auditor := audit.NewAuditor(logger, "", "")
 	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
@@ -125,7 +125,7 @@ func TestGetMetricHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	auditor := audit.NewAuditor(logger)
+	auditor := audit.NewAuditor(logger, "", "")
 	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 

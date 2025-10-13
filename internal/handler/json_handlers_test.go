@@ -22,7 +22,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
-	auditor := audit.NewAuditor(logger)
+	auditor := audit.NewAuditor(logger, "", "")
 	h := NewHandler(ms, "", auditor, logger)
 
 	r := chi.NewRouter()
@@ -78,7 +78,7 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()
-	auditor := audit.NewAuditor(logger)
+	auditor := audit.NewAuditor(logger, "", "")
 	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 

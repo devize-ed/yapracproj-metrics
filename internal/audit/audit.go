@@ -21,36 +21,40 @@ type AuditMsg struct {
 type Auditor struct {
 	eventChan    chan AuditMsg
 	registerChan chan chan AuditMsg
+	auditFile    string
+	auditURL     string
 	logger       *zap.SugaredLogger
 }
 
 // NewAuditor creates a new auditor.
-func NewAuditor(logger *zap.SugaredLogger) *Auditor {
+func NewAuditor(logger *zap.SugaredLogger, auditFile string, auditURL string) *Auditor {
 
 	return &Auditor{
 		eventChan:    make(chan AuditMsg),
+		auditFile:    auditFile,
+		auditURL:     auditURL,
 		registerChan: make(chan chan AuditMsg, 2),
 		logger:       logger,
 	}
 }
 
 // Run starts the auditor.
-func (a *Auditor) Run(ctx context.Context, auditFile string, auditURL string) {
+func (a *Auditor) Run(ctx context.Context) {
 	a.logger.Debugf("starting auditor")
 	// Create a map of subscriptions.
 	subs := make(map[chan AuditMsg]struct{})
 	// if audit file is set, start the file auditor
-	if auditFile != "" {
+	if a.auditFile != "" {
 		ch := a.Register()
-		go RunFileAudit(ctx, ch, auditFile, a.logger)
+		go RunFileAudit(ctx, ch, a.auditFile, a.logger)
 	}
 	// if audit URL is set, start the URL auditor
-	if auditURL != "" {
+	if a.auditURL != "" {
 		ch := a.Register()
-		go RunURLAudit(ctx, ch, auditURL, a.logger)
+		go RunURLAudit(ctx, ch, a.auditURL, a.logger)
 	}
 	// if audit file and URL are not set, skip the auditors
-	if auditFile == "" && auditURL == "" {
+	if a.auditFile == "" && a.auditURL == "" {
 		a.logger.Debugf("audit file and URL are not set, skipping auditors")
 		return
 	}

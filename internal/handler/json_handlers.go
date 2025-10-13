@@ -65,6 +65,9 @@ func (h *Handler) UpdateMetricJSONHandler() http.HandlerFunc {
 			http.Error(w, "Invalid metric type", http.StatusBadRequest)
 			return
 		}
+
+		// Send metric to auditor
+		h.auditor.Send(r.RemoteAddr, []string{metricName})
 		// Write response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -165,7 +168,18 @@ func (h *Handler) UpdateBatchHandler() http.HandlerFunc {
 		}
 
 		h.logger.Debug("Saved batch of metrics", zap.Any("batch", metrics))
+
+		// Send metrics to auditor
+		h.auditor.Send(r.RemoteAddr, metricsToStrings(metrics))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}
+}
+
+func metricsToStrings(metrics []models.Metrics) []string {
+	metricsStrings := []string{}
+	for _, metric := range metrics {
+		metricsStrings = append(metricsStrings, metric.ID)
+	}
+	return metricsStrings
 }
