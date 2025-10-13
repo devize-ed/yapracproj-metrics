@@ -61,6 +61,16 @@ func run() error {
 	auditor := audit.NewAuditor(logger)
 	// start the auditor
 	go auditor.Run(ctx)
+	// if audit file is set, start the file auditor
+	if cfg.Audit.AuditFile != "" {
+		ch := auditor.Register()
+		go audit.RunFileAudit(ctx, ch, cfg.Audit.AuditFile, logger)
+	}
+	if cfg.Audit.AuditURL != "" {
+		// if audit URL is set, start the URL auditor
+		ch := auditor.Register()
+		go audit.RunURLAudit(ctx, ch, cfg.Audit.AuditURL, logger)
+	}
 
 	// create a new HTTP server with the configuration and handler
 	h := handler.NewHandler(repository, cfg.Sign.Key, auditor, logger)

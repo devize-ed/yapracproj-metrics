@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 type AuditMsg struct {
 	TimeStamp time.Time `json:"ts"`
 	Addr      string    `json:"ip_address"`
-	Metrics   string    `json:"metrics"`
+	Metrics   []string  `json:"metrics"`
 }
 
 // Auditor is a struct that contains channels for events and registrations.
@@ -34,10 +35,26 @@ func NewAuditor(logger *zap.SugaredLogger) *Auditor {
 }
 
 // Run starts the auditor.
-func (a *Auditor) Run(ctx context.Context) {
+func (a *Auditor) Run(ctx context.Context, auditFile string, auditURL string) {
 	a.logger.Debugf("starting auditor")
 	// Create a map of subscriptions.
 	subs := make(map[chan AuditMsg]struct{})
+	// if audit file is set, start the file auditor
+	if auditFile != "" {
+		ch := a.Register()
+		go RunFileAudit(ctx, ch, auditFile, a.logger)
+	}
+	// if audit URL is set, start the URL auditor
+	if auditURL != "" {
+		ch := a.Register()
+		go RunURLAudit(ctx, ch, auditURL, a.logger)
+	}
+	// if audit file and URL are not set, skip the auditors
+	if auditFile == "" && auditURL == "" {
+		a.logger.Debugf("audit file and URL are not set, skipping auditors")
+		return
+	}
+	// start the auditors
 	for {
 		select {
 		// If the context is done, close all subscriptions.
@@ -63,14 +80,18 @@ func (a *Auditor) Run(ctx context.Context) {
 }
 
 // Send sends a message to the auditor.
-func (a *Auditor) Send(addr, metrics string) {
+func (a *Auditor) Send(addr string, metrics []string) {
 	msg := AuditMsg{
 		TimeStamp: time.Now(),
 		Addr:      addr,
 		Metrics:   metrics,
 	}
-	a.eventChan <- msg
-	a.logger.Debugf("sent message to auditor: %v", msg)
+	select {
+	case a.eventChan <- msg:
+		a.logger.Debugf("sent message to auditor: %v", msg)
+	default:
+		a.logger.Warn("audit queue is full; dropping message")
+	}
 }
 
 // Register registers a new subscription to the auditor.
@@ -81,33 +102,69 @@ func (a *Auditor) Register() chan AuditMsg {
 }
 
 // RunFileAudit runs the file auditor.
-func RunFileAudit(ch <-chan AuditMsg, fname string, logger *zap.SugaredLogger) {
-	for msg := range ch {
-		logger.Debugf("received message from event channel: %v", msg)
-		// Save the message to the file.
-		if err := os.WriteFile(fname, []byte(msg.Metrics), 0644); err != nil {
-			logger.Errorf("failed to save message to file: %v", err)
+func RunFileAudit(ctx context.Context, ch <-chan AuditMsg, fname string, logger *zap.SugaredLogger) {
+	// Open the audit file.
+	f, err := os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		logger.Errorf("open audit file: %v", err)
+		return
+	}
+	// Close the audit file.
+	defer func() {
+		if err := f.Sync(); err != nil {
+			logger.Errorf("sync audit file: %v", err)
 		}
-		logger.Debugf("message saved to file: %v", fname)
+		if err := f.Close(); err != nil {
+			logger.Errorf("close audit file: %v", err)
+		}
+	}()
+	// Create a new JSON encoder.
+	enc := json.NewEncoder(f)
+	// Wait for messages from the channel and send them to the file.
+	for {
+		select {
+		// If the context is done, exit
+		case <-ctx.Done():
+			logger.Debugf("context done, exiting")
+			return
+		// If a new message is received, send it to the file.
+		case msg, ok := <-ch:
+			// If the channel is closed, exit
+			if !ok {
+				return
+			}
+			// If the message is not encoded, exit
+			if err := enc.Encode(msg); err != nil {
+				logger.Errorf("write audit json: %v", err)
+			}
+		}
 	}
 }
 
 // RunURLAudit runs the URL auditor.
-func RunURLAudit(ch <-chan AuditMsg, url string, logger *zap.SugaredLogger) {
+func RunURLAudit(ctx context.Context, ch <-chan AuditMsg, url string, logger *zap.SugaredLogger) {
 	// Create a new resty client.
-	client := resty.New().
-		SetBaseURL(url).
-		SetTimeout(time.Duration(10) * time.Second)
-
+	client := resty.New().SetTimeout(10 * time.Second)
 	// Wait for messages from the channel and send them to the URL.
-	for msg := range ch {
-		logger.Debugf("received message from event channel: %v", msg)
-		// Send the message to the URL.
-		if _, err := client.R().
-			SetBody(msg.Metrics).
-			Post("/"); err != nil {
-			logger.Errorf("failed to send message to URL: %v", err)
+	for {
+		select {
+		// If the context is done, exit
+		case <-ctx.Done():
+			logger.Debugf("context done, exiting")
+			return
+		// If a new message is received, send it to the URL.
+		case msg, ok := <-ch:
+			// If the channel is closed, exit
+			if !ok {
+				return
+			}
+			req := client.R().
+				SetHeader("Content-Type", "application/json").
+				SetBody(msg).
+				SetContext(ctx)
+			if _, err := req.Post(url); err != nil {
+				logger.Errorf("send audit to %s: %v", url, err)
+			}
 		}
-		logger.Debugf("message sent to URL: %v", msg.Metrics)
 	}
 }
