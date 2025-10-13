@@ -3,10 +3,9 @@ package handler
 import (
 	"net/http"
 
+	mw "github.com/devize-ed/yapracproj-metrics.git/internal/handler/middleware"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-
-	mw "github.com/devize-ed/yapracproj-metrics.git/internal/handler/middleware"
 )
 
 func (h *Handler) NewRouter() http.Handler {
