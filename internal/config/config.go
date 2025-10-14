@@ -1,3 +1,5 @@
+// Package config provides configuration management for both server and agent components.
+// It handles parsing of environment variables, command-line flags, and validation.
 package config
 
 import (

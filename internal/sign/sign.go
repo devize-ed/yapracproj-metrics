@@ -1,3 +1,5 @@
+// Package sign provides cryptographic signature functionality.
+// It handles HMAC-SHA256 hash generation and verification for request integrity.
 package sign
 
 import (
@@ -7,6 +9,7 @@ import (
 	"fmt"
 )
 
+// HashHeader is the HTTP header name for the HMAC-SHA256 hash.
 const HashHeader = "HashSHA256"
 
 // Hash calculates the HMAC-SHA256 hash of the given data using the provided key.

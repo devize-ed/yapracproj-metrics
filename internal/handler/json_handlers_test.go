@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -130,4 +131,120 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Examples:
+func Example_jsonParams() {
+	// Initialize logger
+	log, err := logger.Initialize("debug")
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	defer log.Sync()
+
+	// Initialize endpoints
+	endpointUpdate := "/update"
+	endpointGet := "/value"
+
+	// Initialize storage and auditor
+	ms := mstorage.NewMemStorage()
+	auditor := audit.NewAuditor(log, "", "")
+
+	// Initialize handler
+	h := NewHandler(ms, "", auditor, log)
+
+	// Initialize router
+	r := chi.NewRouter()
+	r.Post(endpointUpdate, h.UpdateMetricJSONHandler())
+	r.Post(endpointGet, h.GetMetricJSONHandler())
+
+	// Initialize server
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// Initialize client
+	client := resty.New()
+
+	// Update counter metric
+	resp, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(`{"id":"testCounter","type":"counter","delta":5}`).
+		Post(srv.URL + endpointUpdate)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	fmt.Println("Response code (update counter):", resp.StatusCode())
+
+	// Update gauge metric
+	resp, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(`{"id":"testGauge1","type":"gauge","value":123123}`).
+		Post(srv.URL + endpointUpdate)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	fmt.Println("Response code (update gauge):", resp.StatusCode())
+
+	// Get counter metric
+	resp, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(`{"id":"testCounter","type":"counter"}`).
+		Post(srv.URL + endpointGet)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	fmt.Println("Response code (get counter):", resp.StatusCode())
+	fmt.Println("Response body (get counter):", string(resp.Body()))
+
+	// Output:
+	// Response code (update counter): 200
+	// Response code (update gauge): 200
+	// Response code (get counter): 200
+	// Response body (get counter): {"id":"testCounter","type":"counter","delta":5}
+}
+
+func ExampleHandler_UpdateBatchHandler() {
+	// Initialize logger
+	log, err := logger.Initialize("debug")
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	defer log.Sync()
+
+	// Initialize endpoints
+	endpoint := "/updates"
+
+	// Initialize storage and auditor
+	ms := mstorage.NewMemStorage()
+	auditor := audit.NewAuditor(log, "", "")
+
+	// Initialize handler
+	h := NewHandler(ms, "", auditor, log)
+
+	// Initialize router
+	r := chi.NewRouter()
+	r.Post(endpoint, h.UpdateBatchHandler())
+
+	// Initialize server
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// Initialize client
+	client := resty.New()
+
+	// Update batch metric
+	resp, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(`[{"id":"testCounter","type":"counter","delta":5},{"id":"testGauge1","type":"gauge","value":123123}]`).
+		Post(srv.URL + endpoint)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+
+	fmt.Println("Response code:", resp.StatusCode())
+	fmt.Println("Response body:", string(resp.Body()))
+
+	// Output:
+	// Response code: 200
+	// Response body: {"status":"ok"}
 }

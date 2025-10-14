@@ -1,3 +1,5 @@
+// Package handler provides HTTP handlers for metric operations.
+// It handles metric updates, retrieval, and listing with proper error handling.
 package handler
 
 import (

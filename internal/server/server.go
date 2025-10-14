@@ -1,3 +1,5 @@
+// Package server provides HTTP server functionality.
+// It handles server lifecycle, graceful shutdown, and request routing.
 package server
 
 import (
@@ -32,7 +34,7 @@ func NewServer(cfg config.ServerConfig, h *handler.Handler, logger *zap.SugaredL
 	return s
 }
 
-// Shutdown passes through to the embedded http.Server.
+// shutdown gracefully shuts down the HTTP server.
 func (s *Server) shutdown(ctx context.Context) error {
 	return s.Shutdown(ctx)
 }

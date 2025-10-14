@@ -1,3 +1,5 @@
+// Package audit provides audit logging functionality.
+// It handles audit message collection, distribution, and persistence to files or URLs.
 package audit
 
 import (

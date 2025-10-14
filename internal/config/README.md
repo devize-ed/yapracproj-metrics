@@ -1,5 +1,4 @@
 # internal/config
 
-В этом пакете хранятся конфигурации приложения.
+This package provides configuration management for both server and agent components.
 
-Загрузку конфигурации можно реализовать из различных источников, например, из файла, из переменных окружения, из БД и т.д.

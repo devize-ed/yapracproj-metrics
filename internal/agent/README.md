@@ -1,3 +1,3 @@
 # internal/agent
 
-В данной директории будет содержаться имплементация вашего сервиса
+This package provides functionality for collecting and sending metrics to a server.

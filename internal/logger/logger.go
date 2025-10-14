@@ -1,3 +1,5 @@
+// Package logger provides structured logging functionality.
+// It initializes and configures zap logger with proper formatting and error handling.
 package logger
 
 import (
@@ -10,7 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Initialize singleton logger.
+// Initialize creates and configures a new logger instance.
 func Initialize(level string) (*zap.SugaredLogger, error) {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
@@ -46,6 +48,7 @@ func Initialize(level string) (*zap.SugaredLogger, error) {
 	return zl.Sugar(), nil
 }
 
+// SafeSync safely syncs the logger, handling common sync errors.
 func SafeSync(sugar *zap.SugaredLogger) {
 	if sugar == nil {
 		return
