@@ -1,3 +1,4 @@
+// Package agent provides configuration structures for the agent component.
 package agent
 
 type AgentConfig struct {

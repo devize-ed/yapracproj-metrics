@@ -1,7 +1,10 @@
+// Package logger provides structured logging functionality.
+// It initializes and configures zap logger with proper formatting and error handling.
 package logger
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 
@@ -9,38 +12,48 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Initialize singleton logger.
+// Initialize creates and configures a new logger instance.
 func Initialize(level string) (*zap.SugaredLogger, error) {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := zap.NewDevelopmentConfig()
+	cfg := zap.NewProductionConfig()
+	// Add level
 	cfg.Level = lvl
-	cfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006/01/02 15:04:05")
-	cfg.EncoderConfig.TimeKey = "time"
+	// Add time
+	cfg.EncoderConfig.TimeKey = "ts"
+	cfg.EncoderConfig.EncodeTime = zapcore.EpochMillisTimeEncoder
+	// Add caller
 	cfg.EncoderConfig.CallerKey = "caller"
 	cfg.EncoderConfig.MessageKey = "msg"
 	cfg.EncoderConfig.LevelKey = "level"
+	// Disable stacktrace
 	cfg.DisableStacktrace = true
 
+	// Add sampling (cuts allocations on logs)
+	cfg.Sampling = &zap.SamplingConfig{
+		Initial:    100,
+		Thereafter: 100,
+	}
+
 	zl, err := cfg.Build(
-		zap.AddStacktrace(zapcore.FatalLevel),
 		zap.AddCaller(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to build logger: %w", err)
 	}
 
 	return zl.Sugar(), nil
 }
 
-func SafeSync(logger *zap.SugaredLogger) {
-	if logger == nil {
+// SafeSync safely syncs the logger, handling common sync errors.
+func SafeSync(sugar *zap.SugaredLogger) {
+	if sugar == nil {
 		return
 	}
-	if err := logger.Sync(); err != nil {
+	if err := sugar.Sync(); err != nil {
 		var pe *os.PathError
 		if errors.As(err, &pe) && (errors.Is(pe.Err, syscall.EINVAL) || errors.Is(pe.Err, syscall.ENOTTY)) {
 			return
@@ -48,6 +61,6 @@ func SafeSync(logger *zap.SugaredLogger) {
 		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTTY) {
 			return
 		}
-		logger.Errorf("failed to sync logger: %w", err)
+		_, _ = os.Stderr.WriteString("failed to sync logger: " + err.Error() + "\n")
 	}
 }

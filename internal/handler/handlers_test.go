@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	mstorage "github.com/devize-ed/yapracproj-metrics.git/internal/repository/mstorage"
 	"github.com/go-chi/chi"
@@ -47,7 +49,8 @@ func TestUpdateHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger, "", "")
+	h := NewHandler(ms, "", auditor, logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -89,7 +92,8 @@ func TestListAllHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger, "", "")
+	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -122,7 +126,8 @@ func TestGetMetricHandler(t *testing.T) {
 	defer logger.Sync()
 
 	ms := mstorage.NewMemStorage()
-	h := NewHandler(ms, "", logger)
+	auditor := audit.NewAuditor(logger, "", "")
+	h := NewHandler(ms, "", auditor, logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -150,4 +155,87 @@ func TestGetMetricHandler(t *testing.T) {
 		})
 
 	}
+}
+
+// Examples:
+
+func Example_urlParams() {
+	// Initialize logger
+	logger, err := logger.Initialize("debug")
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	defer logger.Sync()
+
+	// Initialize endpoints
+	endpointCounter := "/update/counter/testCounter/123"
+	endpointGauge := "/update/gauge/testGauge/123.11"
+
+	// Initialize storage and auditor
+	ms := mstorage.NewMemStorage()
+	auditor := audit.NewAuditor(logger, "", "")
+
+	// Initialize handler
+	h := NewHandler(ms, "", auditor, logger)
+
+	// Initialize router
+	r := chi.NewRouter()
+	r.Post(endpointCounter, h.UpdateMetricHandler())
+	r.Post(endpointGauge, h.UpdateMetricHandler())
+
+	// Initialize server
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// Send request with counter metric
+	req := resty.New().R()
+	req.Method = http.MethodGet
+	req.URL = srv.URL + endpointCounter
+	req.SetHeader("Content-Type", "text/html; charset=utf-8")
+	resp, err := req.Send()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	// Print response code
+	fmt.Println("Response code: ", resp.StatusCode())
+
+	// Send request with gauge metric
+	req.URL = srv.URL + endpointGauge
+	req.SetHeader("Content-Type", "text/html; charset=utf-8")
+	resp, err = req.Send()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	// Print response code
+	fmt.Println("Response code: ", resp.StatusCode())
+
+	// Get Counter metric with URL params
+	req.URL = srv.URL + "/value/counter/testCounter"
+	req.SetHeader("Content-Type", "text/html; charset=utf-8")
+	resp, err = req.Send()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	// Print response code
+	fmt.Println("Response code: ", resp.StatusCode())
+
+	// Get Gauge metric with URL params
+	req.URL = srv.URL + "/value/gauge/testGauge"
+	req.SetHeader("Content-Type", "text/html; charset=utf-8")
+	resp, err = req.Send()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	// Print response code
+	fmt.Println("Response code: ", resp.StatusCode())
+
+	// List all metrics
+	req.URL = srv.URL + "/"
+	req.SetHeader("Content-Type", "text/html; charset=utf-8")
+	resp, err = req.Send()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	// Print response code
+	fmt.Println("Response code: ", resp.StatusCode())
 }

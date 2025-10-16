@@ -1,3 +1,5 @@
+// Package config provides configuration management for both server and agent components.
+// It handles parsing of environment variables, command-line flags, and validation.
 package config
 
 import (
@@ -7,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env"
 	agent "github.com/devize-ed/yapracproj-metrics.git/internal/agent/config"
+	audit "github.com/devize-ed/yapracproj-metrics.git/internal/audit/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	sign "github.com/devize-ed/yapracproj-metrics.git/internal/sign/config"
 )
@@ -16,6 +19,7 @@ type ServerConfig struct {
 	Connection ServerConn
 	Repository repository.RepositoryConfig
 	Sign       sign.SignConfig
+	Audit      audit.AuditConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
 }
 
@@ -48,6 +52,8 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
 	flag.BoolVar(&cfg.Repository.FSConfig.Restore, "r", false, "restore metrics from file")
 	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
+	flag.StringVar(&cfg.Audit.AuditFile, "audit-file", "", "file path for storing audit")
+	flag.StringVar(&cfg.Audit.AuditURL, "audit-url", "", "URL for storing audit")
 
 	// Parse flags.
 	flag.Parse()
@@ -66,6 +72,9 @@ func GetServerConfig() (ServerConfig, error) {
 		return cfg, err
 	}
 	if err := env.Parse(&cfg.Sign); err != nil {
+		return cfg, err
+	}
+	if err := env.Parse(&cfg.Audit); err != nil {
 		return cfg, err
 	}
 

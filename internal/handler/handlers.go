@@ -1,3 +1,5 @@
+// Package handler provides HTTP handlers for metric operations.
+// It handles metric updates, retrieval, and listing with proper error handling.
 package handler
 
 import (
@@ -6,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	"github.com/go-chi/chi"
@@ -14,16 +17,18 @@ import (
 
 // Handler wraps the storage.
 type Handler struct {
-	storage repository.Repository
-	hashKey string
+	storage repository.Repository // storage for metrics
+	hashKey string                // key for hashing requests
+	auditor *audit.Auditor        // audito servic for logging changes of metrics
 	logger  *zap.SugaredLogger
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r repository.Repository, key string, logger *zap.SugaredLogger) *Handler {
+func NewHandler(r repository.Repository, key string, auditor *audit.Auditor, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
 		storage: r,
 		hashKey: key,
+		auditor: auditor, //
 		logger:  logger,
 	}
 }

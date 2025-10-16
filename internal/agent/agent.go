@@ -1,3 +1,5 @@
+// Package agent provides functionality for collecting and sending metrics to a server.
+// It includes metric collection, batching, compression, and retry mechanisms.
 package agent
 
 import (
@@ -50,6 +52,7 @@ func NewAgent(client *resty.Client, config config.AgentConfig, logger *zap.Sugar
 	}
 }
 
+// NewJobs creates a new jobs queue with the specified number of workers.
 func NewJobs(numWorkers int, logger *zap.SugaredLogger) *jobs {
 	return &jobs{
 		jobsQueue: make(chan batchRequest, numWorkers),
@@ -57,6 +60,7 @@ func NewJobs(numWorkers int, logger *zap.SugaredLogger) *jobs {
 	}
 }
 
+// Run starts the agent's main loop for collecting and sending metrics.
 func (a *Agent) Run(ctx context.Context) error {
 	// Convert interval values to time.Duration.
 	timePollInterval := time.Duration(a.config.Agent.PollInterval) * time.Second
@@ -84,10 +88,12 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 }
 
+// gatherMetrics collects metrics from the system.
 func (a *Agent) gatherMetrics() {
 	a.storage.collectMetrics()
 }
 
+// sendMetrics sends collected metrics to the server.
 func (a *Agent) sendMetrics() error {
 	a.logger.Debug("Sending metrics")
 	// Check whether "test‑get" mode is enabled.
@@ -231,6 +237,7 @@ func getMetric[T MetricValue](request func(name string, endpoint string, bodyByt
 	return nil
 }
 
+// request sends an HTTP request to the specified endpoint.
 func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	a.logger.Debugf("Request: %s %s", name, endpoint)
 
@@ -277,6 +284,7 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	return nil
 }
 
+// compress compresses data using gzip compression.
 func compress(data []byte, logger *zap.SugaredLogger) ([]byte, error) {
 	logger.Debugf("Compressing data")
 	// Compress the JSON body.
@@ -292,6 +300,7 @@ func compress(data []byte, logger *zap.SugaredLogger) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// clientWithRetries configures the HTTP client with retry logic and backoff.
 func clientWithRetries(client *resty.Client, logger *zap.SugaredLogger) *resty.Client {
 	// Set the retry count and backoff delay.
 	backoffs := []time.Duration{time.Second, 3 * time.Second, 5 * time.Second}

@@ -1,12 +1,10 @@
 # internal/repository
 
-Это пакет, содержит реализацию работы с базой данных, а также с внешними сервисами.
+This package provides data storage abstraction for metrics.
 
-Важно, чтобы в репозитории не содержалось бизнес-логики.
 
-Репозиторий реализует паттерн Repository и служит абстракцией над различными источниками данных, такими как:
-- базы данных (PostgreSQL, MySQL и др.)
-- внешние API
-- файловые системы
-- кэши (Redis, Memcached)
-- и другие
+# Storage:
+- Database Storage
+- File Storage
+- Memory Storage
+

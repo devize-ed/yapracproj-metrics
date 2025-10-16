@@ -1,5 +1,16 @@
 # internal/model
 
-В этом пакете размещаются структуры данных, которые представляют основные сущности предметной области приложения.
+This package defines the data structures for metrics.
 
-Эти структуры используются в сервисах и хэндлерах. Данный пакет не должен содержать бизнес-логику приложения.
+## Data Structures
+
+### Metrics
+
+The main `Metrics` struct represents a metric with:
+- `ID`: Unique identifier for the metric
+- `MType`: Type of metric (counter or gauge)
+- `Delta`: Value for counter metrics (pointer to distinguish 0 from unset)
+- `Value`: Value for gauge metrics (pointer to distinguish 0 from unset)
+- `Hash`: Optional hash for integrity verification
+
+

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
@@ -56,8 +57,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// create a new auditor with the logger
+	auditor := audit.NewAuditor(logger, cfg.Audit.AuditFile, cfg.Audit.AuditURL)
+	// start the auditor
+	go auditor.Run(ctx)
+
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(repository, cfg.Sign.Key, logger)
+	h := handler.NewHandler(repository, cfg.Sign.Key, auditor, logger)
 	srv := server.NewServer(cfg, h, logger)
 
 	if err = srv.Serve(ctx); err != nil {

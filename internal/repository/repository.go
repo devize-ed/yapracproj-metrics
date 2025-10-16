@@ -1,3 +1,5 @@
+// Package repository provides data storage abstraction for metrics.
+// It supports multiple storage backends including database, file, and in-memory storage.
 package repository
 
 import (
