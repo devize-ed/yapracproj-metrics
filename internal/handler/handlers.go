@@ -17,9 +17,9 @@ import (
 
 // Handler wraps the storage.
 type Handler struct {
-	storage repository.Repository
-	hashKey string
-	auditor *audit.Auditor
+	storage repository.Repository // storage for metrics
+	hashKey string                // key for hashing requests
+	auditor *audit.Auditor        // audito servic for logging changes of metrics
 	logger  *zap.SugaredLogger
 }
 
@@ -28,7 +28,7 @@ func NewHandler(r repository.Repository, key string, auditor *audit.Auditor, log
 	return &Handler{
 		storage: r,
 		hashKey: key,
-		auditor: auditor,
+		auditor: auditor, //
 		logger:  logger,
 	}
 }

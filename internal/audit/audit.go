@@ -14,18 +14,18 @@ import (
 
 // AuditMsg is a struct that contains the audit message.
 type AuditMsg struct {
-	TimeStamp time.Time `json:"ts"`
-	Addr      string    `json:"ip_address"`
-	Metrics   []string  `json:"metrics"`
+	TimeStamp time.Time `json:"ts"` // timestamp of the audit message
+	Addr      string    `json:"ip_address"` // source address of the request
+	Metrics   []string  `json:"metrics"` // list of metrics that were updated
 }
 
 // Auditor is a struct that contains channels for events and registrations.
 type Auditor struct {
-	eventChan    chan AuditMsg
-	registerChan chan chan AuditMsg
-	auditFile    string
-	auditURL     string
-	logger       *zap.SugaredLogger
+	eventChan    chan AuditMsg // channel for sending audit messages
+	registerChan chan chan AuditMsg // channel for registering new subscriptions
+	auditFile    string // file path for storing audit data
+	auditURL     string // URL for sending audit data to the remote server
+	logger       *zap.SugaredLogger 
 }
 
 // NewAuditor creates a new auditor.
@@ -164,6 +164,7 @@ func RunURLAudit(ctx context.Context, ch <-chan AuditMsg, url string, logger *za
 			if !ok {
 				return
 			}
+			// Send the audit message to the remote server
 			req := client.R().
 				SetHeader("Content-Type", "application/json").
 				SetBody(msg).
