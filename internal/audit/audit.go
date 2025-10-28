@@ -14,18 +14,18 @@ import (
 
 // AuditMsg is a struct that contains the audit message.
 type AuditMsg struct {
-	TimeStamp time.Time `json:"ts"` // timestamp of the audit message
+	TimeStamp time.Time `json:"ts"`         // timestamp of the audit message
 	Addr      string    `json:"ip_address"` // source address of the request
-	Metrics   []string  `json:"metrics"` // list of metrics that were updated
+	Metrics   []string  `json:"metrics"`    // list of metrics that were updated
 }
 
 // Auditor is a struct that contains channels for events and registrations.
 type Auditor struct {
-	eventChan    chan AuditMsg // channel for sending audit messages
+	eventChan    chan AuditMsg      // channel for sending audit messages
 	registerChan chan chan AuditMsg // channel for registering new subscriptions
-	auditFile    string // file path for storing audit data
-	auditURL     string // URL for sending audit data to the remote server
-	logger       *zap.SugaredLogger 
+	auditFile    string             // file path for storing audit data
+	auditURL     string             // URL for sending audit data to the remote server
+	logger       *zap.SugaredLogger
 }
 
 // NewAuditor creates a new auditor.
