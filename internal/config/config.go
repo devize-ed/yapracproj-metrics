@@ -129,3 +129,10 @@ func GetAgentConfig() (AgentConfig, error) {
 	}
 	return cfg, nil
 }
+
+func GetBuildTag(value string) string {
+	if value == "" {
+		return "N/A"
+	}
+	return value
+}

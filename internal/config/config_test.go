@@ -287,3 +287,36 @@ func TestGetAgentConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestGetValueOrDefault(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "empty string",
+			input: "",
+			want:  "N/A",
+		},
+		{
+			name:  "non-empty string (version)",
+			input: "1.2.3",
+			want:  "1.2.3",
+		},
+		{
+			name:  "non-empty string (commit)",
+			input: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
+			want:  "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetBuildTag(tt.input)
+			if got != tt.want {
+				t.Errorf("GetBuildTag() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
