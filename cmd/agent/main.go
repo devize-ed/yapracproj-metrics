@@ -14,7 +14,15 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s", config.GetBuildTag(buildVersion), config.GetBuildTag(buildDate), config.GetBuildTag(buildCommit))
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
