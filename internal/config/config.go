@@ -10,6 +10,7 @@ import (
 	"github.com/caarlos0/env"
 	agent "github.com/devize-ed/yapracproj-metrics.git/internal/agent/config"
 	audit "github.com/devize-ed/yapracproj-metrics.git/internal/audit/config"
+	encryption "github.com/devize-ed/yapracproj-metrics.git/internal/encryption/config"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
 	sign "github.com/devize-ed/yapracproj-metrics.git/internal/sign/config"
 )
@@ -20,6 +21,7 @@ type ServerConfig struct {
 	Repository repository.RepositoryConfig
 	Sign       sign.SignConfig
 	Audit      audit.AuditConfig
+	Encryption encryption.EncryptionConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
 }
 
@@ -33,6 +35,7 @@ type AgentConfig struct {
 	Connection AgentConn
 	Agent      agent.AgentConfig
 	Sign       sign.SignConfig
+	Encryption encryption.EncryptionConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
 }
 
