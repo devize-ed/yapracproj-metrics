@@ -3,6 +3,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -23,6 +24,7 @@ type ServerConfig struct {
 	Audit      audit.AuditConfig
 	Encryption encryption.EncryptionConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the server.
+	Config     string `env:"CONFIG"`                       // Path to the configuration file.
 }
 
 // ServerConn holds server address configuration.
@@ -37,6 +39,7 @@ type AgentConfig struct {
 	Sign       sign.SignConfig
 	Encryption encryption.EncryptionConfig
 	LogLevel   string `env:"LOG_LEVEL" envDefault:"debug"` // Log level for the agent.
+	Config     string `env:"CONFIG"`                       // Path to the configuration file.
 }
 
 // AgentConn holds agent connection configuration.
@@ -47,6 +50,16 @@ type AgentConn struct {
 // GetServerConfig parses environment variables and command-line flags, then returns the server configuration.
 func GetServerConfig() (ServerConfig, error) {
 	cfg := ServerConfig{}
+
+	// Check if flag or environment variable for config file is provided
+	if cfg.Config != "" || flag.Lookup("c") != nil {
+		// load config from file
+		cfg, err := json.Unmarshal([]byte(cfg.Config), &cfg)
+		if err != nil {
+			return cfg, fmt.Errorf("failed to unmarshal config file: %w", err)
+		}
+		return cfg, nil
+	}
 
 	// Set CLI flags.
 	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address of HTTP server")

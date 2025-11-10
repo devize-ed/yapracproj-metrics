@@ -176,7 +176,7 @@ func TestGetAgentConfig(t *testing.T) {
 				"KEY":                "test_key",
 				"RATE_LIMIT":         "1",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false", "-l=5"},
+			args: []string{"-a=:7070", "-r=30", "-p=10", "-gzip=false", "-g=false", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: "localhost:8081"},
 				Agent: agentcfg.AgentConfig{
@@ -196,7 +196,7 @@ func TestGetAgentConfig(t *testing.T) {
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false", "-k=test2_key", "-l=5"},
+			args:    []string{"-a=:7070", "-r=5", "-p=1", "-gzip=false", "-g=false", "-k=test2_key", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -241,7 +241,7 @@ func TestGetAgentConfig(t *testing.T) {
 				"ENABLE_GZIP":        "true",
 				"ENABLE_GET_METRICS": "true",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=-1", "-c=false", "-g=false"},
+			args: []string{"-a=:7070", "-r=30", "-p=-1", "-gzip=false", "-g=false"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
