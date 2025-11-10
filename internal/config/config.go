@@ -55,6 +55,7 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
 	flag.BoolVar(&cfg.Repository.FSConfig.Restore, "r", false, "restore metrics from file")
 	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
+	flag.StringVar(&cfg.Encryption.CryptoKey, "crypto-key", "", "path to the crypto key for the encryption")
 	flag.StringVar(&cfg.Audit.AuditFile, "audit-file", "", "file path for storing audit")
 	flag.StringVar(&cfg.Audit.AuditURL, "audit-url", "", "URL for storing audit")
 
@@ -80,6 +81,9 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := env.Parse(&cfg.Audit); err != nil {
 		return cfg, err
 	}
+	if err := env.Parse(&cfg.Encryption); err != nil {
+		return cfg, err
+	}
 
 	// Validate the configuration.
 	if cfg.Repository.FSConfig.StoreInterval < 0 {
@@ -102,6 +106,7 @@ func GetAgentConfig() (AgentConfig, error) {
 	flag.BoolVar(&cfg.Agent.EnableTestGet, "g", false, "enable test retrieval of metrics from the server")
 	flag.IntVar(&cfg.Agent.RateLimit, "l", 1, "rate limit for the agent")
 	flag.StringVar(&cfg.Sign.Key, "k", "", "secret key for the Hash")
+	flag.StringVar(&cfg.Encryption.CryptoKey, "crypto-key", "", "path to the crypto key for the encryption")
 
 	// Parse flags.
 	flag.Parse()
@@ -119,7 +124,9 @@ func GetAgentConfig() (AgentConfig, error) {
 	if err := env.Parse(&cfg.Sign); err != nil {
 		return cfg, err
 	}
-
+	if err := env.Parse(&cfg.Encryption); err != nil {
+		return cfg, err
+	}
 	// Validate the configuration.
 	if cfg.Agent.PollInterval < 0 {
 		return cfg, fmt.Errorf("POLL_INTERVAL must be non-negative (got %d)", cfg.Agent.PollInterval)

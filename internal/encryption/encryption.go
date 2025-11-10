@@ -1,3 +1,4 @@
+// Package encryption provides RSA-OAEP helpers for encrypting and decrypting data.
 package encryption
 
 import (
