@@ -1,9 +1,6 @@
 ## Configuration via JSON files
 
-This folder contains example configuration files for the server and the agent. You can load a JSON config using either:
-
-- Flags: `-c /path/to/config.json` or `-config /path/to/config.json`
-- Environment variable: `CONFIG=/path/to/config.json`
+This folder contains example configuration files for the server and the agent.
 
 ### Examples
 
