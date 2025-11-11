@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,9 +15,20 @@ import (
 	sign "github.com/devize-ed/yapracproj-metrics.git/internal/sign/config"
 )
 
+func writeTempJSON(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "cfg.json")
+	if err := os.WriteFile(fp, []byte(content), 0o600); err != nil {
+		t.Fatalf("write temp json: %v", err)
+	}
+	return fp
+}
+
 func TestGetServerConfig(t *testing.T) {
 	tests := []struct {
 		name           string
+		setupFileJSON  string
 		envVars        map[string]string
 		args           []string
 		expectedConfig ServerConfig
@@ -54,7 +66,7 @@ func TestGetServerConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "CLI flags",
+			name:    "CLI flags (no env, no file)",
 			envVars: map[string]string{},
 			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-d=user:password@/dbname", "-r=false", "-k=test2_key"},
 			expectedConfig: ServerConfig{
@@ -84,7 +96,7 @@ func TestGetServerConfig(t *testing.T) {
 				Connection: ServerConn{Host: "localhost:8080"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
-						StoreInterval: 300,
+						StoreInterval: 0,
 						FPath:         "",
 						Restore:       false,
 					},
@@ -127,16 +139,105 @@ func TestGetServerConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Config file from env",
+			setupFileJSON: `{
+				"connection": {"host": "localhost:9090"},
+				"repository": {
+					"fs": {"store_interval": 1, "file_storage_path": "test.json", "restore": true},
+					"db": {"database_dsn": ""}
+				},
+				"sign": {"key": "test_key"},
+				"log_level": "debug"
+			}`,
+			envVars: map[string]string{
+				"CONFIG":            "",
+				"ADDRESS":           ":9999",
+				"STORE_INTERVAL":    "3",
+				"FILE_STORAGE_PATH": "test.json",
+				"RESTORE":           "true",
+				"DATABASE_DSN":      "",
+				"KEY":               "test_key",
+				"LOG_LEVEL":         "warn",
+			},
+			args: []string{"-a=:8088", "-i=2", "-f=test.json", "-d=test.db", "-r=false", "-k=test_key"},
+			expectedConfig: ServerConfig{
+				Connection: ServerConn{Host: ":9999"},
+				Repository: repo.RepositoryConfig{
+					FSConfig: fs.FStorageConfig{
+						StoreInterval: 3,
+						FPath:         "test.json",
+						Restore:       true,
+					},
+					DBConfig: db.DBConfig{
+						DatabaseDSN: "",
+					},
+				},
+				Sign: sign.SignConfig{
+					Key: "test_key",
+				},
+				LogLevel: "warn",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Config file from flag",
+			setupFileJSON: `{
+				"connection": {"host": "localhost:8085"},
+				"repository": {
+					"fs": {"store_interval": 10, "file_storage_path": "test.json", "restore": false},
+					"db": {"database_dsn": ""}
+				},
+				"sign": {"key": "test_key"},
+				"log_level": "debug"
+			}`,
+			envVars: map[string]string{
+				"ADDRESS": ":5050",
+			},
+			args: []string{"-c", "configpath.json", "-a=:6060", "-i=11", "-f=test.json", "-d=test.db", "-r=true", "-k=test_key"},
+			expectedConfig: ServerConfig{
+				Connection: ServerConn{Host: ":5050"},
+				Repository: repo.RepositoryConfig{
+					FSConfig: fs.FStorageConfig{
+						StoreInterval: 11,
+						FPath:         "test.json",
+						Restore:       true,
+					},
+					DBConfig: db.DBConfig{
+						DatabaseDSN: "test.db",
+					},
+				},
+				Sign: sign.SignConfig{
+					Key: "test_key",
+				},
+				LogLevel: "debug",
+			},
+			wantErr: false,
+		},
 	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
 
 			for _, k := range []string{
 				"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN",
-				"LOG_LEVEL", "KEY",
+				"LOG_LEVEL", "KEY", "CONFIG",
 			} {
 				t.Setenv(k, "")
+			}
+
+			if tc.setupFileJSON != "" {
+				fp := writeTempJSON(t, tc.setupFileJSON)
+				if _, has := tc.envVars["CONFIG"]; has {
+					tc.envVars["CONFIG"] = fp
+				} else {
+					for i := range tc.args {
+						if tc.args[i] == "configpath.json" {
+							tc.args[i] = fp
+						}
+					}
+				}
 			}
 
 			for key, val := range tc.envVars {
@@ -159,6 +260,7 @@ func TestGetServerConfig(t *testing.T) {
 func TestGetAgentConfig(t *testing.T) {
 	tests := []struct {
 		name           string
+		setupFileJSON  string
 		envVars        map[string]string
 		args           []string
 		expectedConfig AgentConfig
@@ -170,11 +272,11 @@ func TestGetAgentConfig(t *testing.T) {
 				"ADDRESS":            "localhost:8081",
 				"REPORT_INTERVAL":    "5",
 				"POLL_INTERVAL":      "1",
-				"LOG_LEVEL":          "error",
+				"LOG_LEVEL":          "debug",
 				"ENABLE_GZIP":        "true",
 				"ENABLE_GET_METRICS": "true",
 				"KEY":                "test_key",
-				"RATE_LIMIT":         "1",
+				"RATE_LIMIT":         "10",
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10", "-gzip=false", "-g=false", "-l=5"},
 			expectedConfig: AgentConfig{
@@ -184,19 +286,19 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   1,
 					EnableGzip:     true,
 					EnableTestGet:  true,
-					RateLimit:      1,
+					RateLimit:      10,
 				},
 				Sign: sign.SignConfig{
 					Key: "test_key",
 				},
-				LogLevel: "error",
+				LogLevel: "debug",
 			},
 			wantErr: false,
 		},
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-r=5", "-p=1", "-gzip=false", "-g=false", "-k=test2_key", "-l=5"},
+			args:    []string{"-a=:7070", "-r=5", "-p=1", "-gzip=false", "-g=false", "-k=test_key", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -207,7 +309,7 @@ func TestGetAgentConfig(t *testing.T) {
 					RateLimit:      5,
 				},
 				Sign: sign.SignConfig{
-					Key: "test2_key",
+					Key: "test_key",
 				},
 				LogLevel: "",
 			},
@@ -224,7 +326,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   2,
 					EnableGzip:     true,
 					EnableTestGet:  false,
-					RateLimit:      1,
+					RateLimit:      10,
 				},
 				Sign: sign.SignConfig{
 					Key: "",
@@ -249,7 +351,7 @@ func TestGetAgentConfig(t *testing.T) {
 					PollInterval:   -1,
 					EnableGzip:     false,
 					EnableTestGet:  false,
-					RateLimit:      1,
+					RateLimit:      10,
 				},
 				Sign: sign.SignConfig{
 					Key: "",
@@ -258,17 +360,106 @@ func TestGetAgentConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Precedence: file < flags < env (CONFIG via env)",
+			setupFileJSON: `{
+				"connection": {"host": "from-file:8085"},
+				"agent": {
+					"report_interval": 11,
+					"poll_interval": 4,
+					"enable_gzip": false,
+					"enable_get_metrics": true,
+					"rate_limit": 4
+				},
+				"sign": {"key": "filekey"},
+				"log_level": "info"
+			}`,
+			envVars: map[string]string{
+				"CONFIG":             "", // fill in test
+				"ADDRESS":            ":9091",
+				"REPORT_INTERVAL":    "13",
+				"POLL_INTERVAL":      "6",
+				"ENABLE_GZIP":        "false",
+				"ENABLE_GET_METRICS": "true",
+				"RATE_LIMIT":         "6",
+				"KEY":                "envkey",
+				"LOG_LEVEL":          "error",
+			},
+			args: []string{"-a=:7070", "-r=12", "-p=5", "-gzip=true", "-g=false", "-l=5", "-k=flagkey"},
+			expectedConfig: AgentConfig{
+				Connection: AgentConn{Host: ":9091"},
+				Agent: agentcfg.AgentConfig{
+					ReportInterval: 13,
+					PollInterval:   6,
+					EnableGzip:     false,
+					EnableTestGet:  true,
+					RateLimit:      6,
+				},
+				Sign: sign.SignConfig{
+					Key: "envkey",
+				},
+				LogLevel: "error",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Precedence: file < flags < env (config via -c flag)",
+			setupFileJSON: `{
+				"connection": {"host": "file-host:8082"},
+				"agent": {
+					"report_interval": 20,
+					"poll_interval": 7,
+					"enable_gzip": true,
+					"enable_get_metrics": false,
+					"rate_limit": 2
+				},
+				"sign": {"key": "filek"},
+				"log_level": "debug"
+			}`,
+			envVars: map[string]string{
+				"ADDRESS": ":8000",
+			},
+			args: []string{"-c", "WILL_BE_REPLACED", "-a=:7000", "-r=21", "-p=8", "-gzip=false", "-g=true", "-l=3", "-k=flagk"},
+			expectedConfig: AgentConfig{
+				Connection: AgentConn{Host: ":8000"}, // env overrides
+				Agent: agentcfg.AgentConfig{
+					ReportInterval: 21, // flags override file
+					PollInterval:   8,  // flags override file
+					EnableGzip:     false,
+					EnableTestGet:  true,
+					RateLimit:      3,
+				},
+				Sign: sign.SignConfig{
+					Key: "flagk",
+				},
+				LogLevel: "debug",
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
-
 			for _, k := range []string{
 				"ADDRESS", "REPORT_INTERVAL", "POLL_INTERVAL", "LOG_LEVEL",
-				"ENABLE_GZIP", "ENABLE_GET_METRICS",
+				"ENABLE_GZIP", "ENABLE_TEST_GET", "ENABLE_GET_METRICS",
+				"KEY", "RATE_LIMIT", "CONFIG",
 			} {
 				t.Setenv(k, "")
+			}
+
+			if tc.setupFileJSON != "" {
+				fp := writeTempJSON(t, tc.setupFileJSON)
+				if _, has := tc.envVars["CONFIG"]; has {
+					tc.envVars["CONFIG"] = fp
+				} else {
+					for i := range tc.args {
+						if tc.args[i] == "WILL_BE_REPLACED" {
+							tc.args[i] = fp
+						}
+					}
+				}
 			}
 
 			for key, val := range tc.envVars {
@@ -294,23 +485,10 @@ func TestGetValueOrDefault(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "empty string",
-			input: "",
-			want:  "N/A",
-		},
-		{
-			name:  "non-empty string (version)",
-			input: "1.2.3",
-			want:  "1.2.3",
-		},
-		{
-			name:  "non-empty string (commit)",
-			input: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
-			want:  "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
-		},
+		{"empty string", "", "N/A"},
+		{"non-empty string (version)", "1.2.3", "1.2.3"},
+		{"non-empty string (commit)", "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6", "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GetBuildTag(tt.input)
