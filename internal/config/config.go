@@ -129,13 +129,6 @@ func getConfigPath() string {
 	return ""
 }
 
-// overrideStringFromEnv overrides the string from the environment variable.
-func overrideStringFromEnv(dst *string, envName string) {
-	if v, ok := os.LookupEnv(envName); ok {
-		*dst = v
-	}
-}
-
 // GetServerConfig gets the server configuration from the command line arguments or environment variables.
 func GetServerConfig() (ServerConfig, error) {
 	// start from defaults

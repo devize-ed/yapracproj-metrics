@@ -15,7 +15,7 @@ func DecryptionMiddleware(privKeyPath string, logger *zap.SugaredLogger) (func(h
 	// Create a new decryptor.
 	decryptor, err := encryption.NewDecryptor(privKeyPath)
 	if err != nil {
-		if errors.Is(err, encryption.EmptyCryptoKeyError) {
+		if errors.Is(err, encryption.ErrEmptyCryptoKey) {
 			logger.Debugf("Decryption key is empty, skipping decryption")
 		} else {
 			return nil, err

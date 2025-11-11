@@ -19,7 +19,9 @@ func TestUpdateJsonHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
@@ -75,7 +77,9 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()
@@ -140,7 +144,9 @@ func Example_jsonParams() {
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
-	defer log.Sync()
+	defer func() {
+		_ = log.Sync()
+	}()
 
 	// Initialize endpoints
 	endpointUpdate := "/update"
@@ -209,7 +215,9 @@ func ExampleHandler_UpdateBatchHandler() {
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
-	defer log.Sync()
+	defer func() {
+		_ = log.Sync()
+	}()
 
 	// Initialize endpoints
 	endpoint := "/updates"

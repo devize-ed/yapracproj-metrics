@@ -12,8 +12,8 @@ import (
 	"os"
 )
 
-// EmptyCryptoKeyError is an error that is returned when a crypto key is empty.
-var EmptyCryptoKeyError = errors.New("crypto key is empty")
+// ErrEmptyCryptoKey is returned when a crypto key path is empty.
+var ErrEmptyCryptoKey = errors.New("crypto key is empty")
 
 // Encryptor is a struct that contains the public key for encryption.
 type Encryptor struct {
@@ -82,7 +82,7 @@ func (d *Decryptor) Decrypt(data []byte) ([]byte, error) {
 func readKey(path string) (*pem.Block, error) {
 	// If the path is empty, return an error.
 	if path == "" {
-		return nil, EmptyCryptoKeyError
+		return nil, ErrEmptyCryptoKey
 	}
 	// Read the key from the file.
 	b, err := os.ReadFile(path)
