@@ -83,6 +83,14 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.logger.Error("error reporting metrics: %w", err)
 			}
 		case <-ctx.Done():
+			a.logger.Info("Stop signal received, sending remaining metrics...")
+			// Perform a final collection to capture the latest values.
+			a.gatherMetrics()
+			// Bound network operations during shutdown.
+			a.client.SetTimeout(5 * time.Second)
+			if err := a.sendMetrics(); err != nil {
+				a.logger.Errorf("final send failed: %v", err)
+			}
 			a.logger.Debug("Closing agent")
 			return nil
 		}
