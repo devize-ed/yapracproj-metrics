@@ -1,7 +1,6 @@
 package config
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -218,11 +217,9 @@ func TestGetServerConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
-
 			for _, k := range []string{
 				"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN",
-				"LOG_LEVEL", "KEY", "CONFIG",
+				"LOG_LEVEL", "KEY", "CONFIG", "CRYPTO_KEY", "AUDIT_FILE", "AUDIT_URL",
 			} {
 				t.Setenv(k, "")
 			}
@@ -269,16 +266,16 @@ func TestGetAgentConfig(t *testing.T) {
 		{
 			name: "Environment variables",
 			envVars: map[string]string{
-				"ADDRESS":            "localhost:8081",
-				"REPORT_INTERVAL":    "5",
-				"POLL_INTERVAL":      "1",
-				"LOG_LEVEL":          "debug",
-				"ENABLE_GZIP":        "true",
-				"ENABLE_GET_METRICS": "true",
-				"KEY":                "test_key",
-				"RATE_LIMIT":         "10",
+				"ADDRESS":         "localhost:8081",
+				"REPORT_INTERVAL": "5",
+				"POLL_INTERVAL":   "1",
+				"LOG_LEVEL":       "debug",
+				"ENABLE_GZIP":     "true",
+				"ENABLE_TEST_GET": "true",
+				"KEY":             "test_key",
+				"RATE_LIMIT":      "10",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=10", "-gzip=false", "-g=false", "-l=5"},
+			args: []string{"-a=:7070", "-r=30", "-p=10", "--gzip=false", "-g=false", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: "localhost:8081"},
 				Agent: agentcfg.AgentConfig{
@@ -291,14 +288,15 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "test_key",
 				},
-				LogLevel: "debug",
+				ShutdownTimeout: 5,
+				LogLevel:        "debug",
 			},
 			wantErr: false,
 		},
 		{
 			name:    "CLI flags",
 			envVars: map[string]string{},
-			args:    []string{"-a=:7070", "-r=5", "-p=1", "-gzip=false", "-g=false", "-k=test_key", "-l=5"},
+			args:    []string{"-a=:7070", "-r=5", "-p=1", "--gzip=false", "-g=false", "-k=test_key", "-l=5"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -311,7 +309,8 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "test_key",
 				},
-				LogLevel: "",
+				ShutdownTimeout: 5,
+				LogLevel:        "",
 			},
 			wantErr: false,
 		},
@@ -331,19 +330,20 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "",
 				},
-				LogLevel: "",
+				ShutdownTimeout: 5,
+				LogLevel:        "",
 			},
 			wantErr: false,
 		},
 		{
 			name: "negative PollInterval",
 			envVars: map[string]string{
-				"ADDRESS":            ":8081",
-				"LOG_LEVEL":          "error",
-				"ENABLE_GZIP":        "true",
-				"ENABLE_GET_METRICS": "true",
+				"ADDRESS":         ":8081",
+				"LOG_LEVEL":       "error",
+				"ENABLE_GZIP":     "true",
+				"ENABLE_TEST_GET": "true",
 			},
-			args: []string{"-a=:7070", "-r=30", "-p=-1", "-gzip=false", "-g=false"},
+			args: []string{"-a=:7070", "-r=30", "-p=-1", "--gzip=false", "-g=false"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":7070"},
 				Agent: agentcfg.AgentConfig{
@@ -356,7 +356,8 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "",
 				},
-				LogLevel: "",
+				ShutdownTimeout: 5,
+				LogLevel:        "",
 			},
 			wantErr: true,
 		},
@@ -375,17 +376,17 @@ func TestGetAgentConfig(t *testing.T) {
 				"log_level": "info"
 			}`,
 			envVars: map[string]string{
-				"CONFIG":             "", // fill in test
-				"ADDRESS":            ":9091",
-				"REPORT_INTERVAL":    "13",
-				"POLL_INTERVAL":      "6",
-				"ENABLE_GZIP":        "false",
-				"ENABLE_GET_METRICS": "true",
-				"RATE_LIMIT":         "6",
-				"KEY":                "envkey",
-				"LOG_LEVEL":          "error",
+				"CONFIG":          "",
+				"ADDRESS":         ":9091",
+				"REPORT_INTERVAL": "13",
+				"POLL_INTERVAL":   "6",
+				"ENABLE_GZIP":     "false",
+				"ENABLE_TEST_GET": "true",
+				"RATE_LIMIT":      "6",
+				"KEY":             "envkey",
+				"LOG_LEVEL":       "error",
 			},
-			args: []string{"-a=:7070", "-r=12", "-p=5", "-gzip=true", "-g=false", "-l=5", "-k=flagkey"},
+			args: []string{"-a=:7070", "-r=12", "-p=5", "--gzip=true", "-g=false", "-l=5", "-k=flagkey"},
 			expectedConfig: AgentConfig{
 				Connection: AgentConn{Host: ":9091"},
 				Agent: agentcfg.AgentConfig{
@@ -398,7 +399,8 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "envkey",
 				},
-				LogLevel: "error",
+				ShutdownTimeout: 5,
+				LogLevel:        "error",
 			},
 			wantErr: false,
 		},
@@ -419,12 +421,12 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{
 				"ADDRESS": ":8000",
 			},
-			args: []string{"-c", "WILL_BE_REPLACED", "-a=:7000", "-r=21", "-p=8", "-gzip=false", "-g=true", "-l=3", "-k=flagk"},
+			args: []string{"-c", "WILL_BE_REPLACED", "-a=:7000", "-r=21", "-p=8", "--gzip=false", "-g=true", "-l=3", "-k=flagk"},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: ":8000"}, // env overrides
+				Connection: AgentConn{Host: ":8000"},
 				Agent: agentcfg.AgentConfig{
-					ReportInterval: 21, // flags override file
-					PollInterval:   8,  // flags override file
+					ReportInterval: 21,
+					PollInterval:   8,
 					EnableGzip:     false,
 					EnableTestGet:  true,
 					RateLimit:      3,
@@ -432,19 +434,19 @@ func TestGetAgentConfig(t *testing.T) {
 				Sign: sign.SignConfig{
 					Key: "flagk",
 				},
-				LogLevel: "debug",
+				ShutdownTimeout: 5,
+				LogLevel:        "debug",
 			},
 			wantErr: false,
 		},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			flag.CommandLine = flag.NewFlagSet(tc.name, flag.ContinueOnError)
+		t.Run(tc.name, func(t *testing.T) { // Clear environment variables
 			for _, k := range []string{
 				"ADDRESS", "REPORT_INTERVAL", "POLL_INTERVAL", "LOG_LEVEL",
-				"ENABLE_GZIP", "ENABLE_TEST_GET", "ENABLE_GET_METRICS",
-				"KEY", "RATE_LIMIT", "CONFIG",
+				"ENABLE_GZIP", "ENABLE_TEST_GET",
+				"KEY", "RATE_LIMIT", "CONFIG", "CRYPTO_KEY", "SHUTDOWN_TIMEOUT",
 			} {
 				t.Setenv(k, "")
 			}

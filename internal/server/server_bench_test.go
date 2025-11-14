@@ -108,7 +108,9 @@ func BenchmarkServerRequestHandling(b *testing.B) {
 					client := &http.Client{Timeout: 1 * time.Second}
 					resp, err := client.Do(req)
 					if err != nil {
-						b.Fatal(err)
+						logger.Error("error making HTTP request", zap.Error(err))
+						b.Fail()
+						return
 					}
 					_ = resp.Body.Close()
 				}

@@ -87,7 +87,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			// Perform a final collection to capture the latest values.
 			a.gatherMetrics()
 			// Bound network operations during shutdown.
-			a.client.SetTimeout(5 * time.Second)
+			a.client.SetTimeout(time.Duration(a.config.ShutdownTimeout))
 			if err := a.sendMetrics(); err != nil {
 				a.logger.Errorf("final send failed: %v", err)
 			}
