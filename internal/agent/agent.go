@@ -274,6 +274,14 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 	a.logger.Debugf("Request body: %s", string(bodyBytes))
 	a.logger.Debugf("Request header: %v", req.Header)
 
+	// Get IP address.
+	ip, err := getIPAddress()
+	if err != nil {
+		return fmt.Errorf("failed to get IP address: %w", err)
+	}
+	// Set the X-Real-IP header.
+	req.SetHeader("X-Real-IP", ip)
+
 	resp, err := req.Post(endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to POST request: %w", err)
@@ -335,4 +343,14 @@ func isErrorRetryable(err error) bool {
 	// Check if the error is a network error.
 	var ne net.Error
 	return errors.As(err, &ne)
+}
+
+// getIPAddress gets the IP address from ther system.
+func getIPAddress() (string, error) {
+	// Get the IP address from the request.
+	ip, err := net.LookupIP("localhost")
+	if err != nil {
+		return "", fmt.Errorf("failed to get IP address: %w", err)
+	}
+	return ip[0].String(), nil
 }
