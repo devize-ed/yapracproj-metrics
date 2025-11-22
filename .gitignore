@@ -28,3 +28,6 @@ vendor/
 *.json
 
 metricstest
+
+golangci-lint
+linter

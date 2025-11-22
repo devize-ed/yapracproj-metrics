@@ -2,5 +2,5 @@
 package config
 
 type SignConfig struct {
-	Key string `env:"KEY"` // Secret key for the Hash.
+	Key string `env:"KEY" json:"key"` // Secret key for the Hash.
 }

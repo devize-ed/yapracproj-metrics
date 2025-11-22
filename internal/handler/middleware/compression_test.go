@@ -18,7 +18,9 @@ func TestMiddlewareGzip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	requestBody := `{
 		"id":"LastGC",

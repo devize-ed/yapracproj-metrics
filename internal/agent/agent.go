@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/encryption"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/sign"
 	"github.com/go-resty/resty/v2"
@@ -82,6 +83,14 @@ func (a *Agent) Run(ctx context.Context) error {
 				a.logger.Error("error reporting metrics: %w", err)
 			}
 		case <-ctx.Done():
+			a.logger.Info("Stop signal received, sending remaining metrics...")
+			// Perform a final collection to capture the latest values.
+			a.gatherMetrics()
+			// Bound network operations during shutdown.
+			a.client.SetTimeout(time.Duration(a.config.ShutdownTimeout))
+			if err := a.sendMetrics(); err != nil {
+				a.logger.Errorf("final send failed: %v", err)
+			}
 			a.logger.Debug("Closing agent")
 			return nil
 		}
@@ -259,6 +268,19 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 		}
 	} else {
 		body = bodyBytes
+	}
+
+	// Encrypt the request body if the encryption is enabled.
+	if a.config.Encryption.CryptoKey != "" {
+		encryptor, err := encryption.NewEncryptor(a.config.Encryption.CryptoKey)
+		if err != nil {
+			return fmt.Errorf("failed to create encryptor: %w", err)
+		}
+		body, err = encryptor.Encrypt(body)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt request body: %w", err)
+		}
+		req.SetHeader("Content-Type", "application/octet-stream").SetHeader("X-Encryption", "rsa")
 	}
 
 	// Set the hash of the request body.

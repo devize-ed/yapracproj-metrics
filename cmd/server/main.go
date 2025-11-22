@@ -62,7 +62,7 @@ func run() error {
 	}()
 
 	// create a context that listens for OS signals to shut down the server
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	// create a new auditor with the logger
