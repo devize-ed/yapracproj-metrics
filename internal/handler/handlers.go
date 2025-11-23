@@ -17,19 +17,21 @@ import (
 
 // Handler wraps the storage.
 type Handler struct {
-	storage repository.Repository // storage for metrics
-	hashKey string                // key for hashing requests
-	auditor *audit.Auditor        // audito servic for logging changes of metrics
-	logger  *zap.SugaredLogger
+	storage       repository.Repository // storage for metrics
+	hashKey       string                // key for hashing requests
+	auditor       *audit.Auditor        // audito servic for logging changes of metrics
+	trustedSubnet string                // trusted subnet for IP filtering
+	logger        *zap.SugaredLogger
 }
 
 // NewHandler constructs a new Handler with the provided storage.
-func NewHandler(r repository.Repository, key string, auditor *audit.Auditor, logger *zap.SugaredLogger) *Handler {
+func NewHandler(r repository.Repository, key string, auditor *audit.Auditor, trustedSubnet string, logger *zap.SugaredLogger) *Handler {
 	return &Handler{
-		storage: r,
-		hashKey: key,
-		auditor: auditor, //
-		logger:  logger,
+		storage:       r,
+		hashKey:       key,
+		auditor:       auditor,
+		trustedSubnet: trustedSubnet,
+		logger:        logger,
 	}
 }
 

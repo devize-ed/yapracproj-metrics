@@ -10,6 +10,7 @@ import (
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/audit"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	grpc "github.com/devize-ed/yapracproj-metrics.git/internal/grpc/server"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/handler"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/logger"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/repository"
@@ -63,8 +64,12 @@ func run() error {
 	go auditor.Run(ctx)
 
 	// create a new HTTP server with the configuration and handler
-	h := handler.NewHandler(repository, cfg.Sign.Key, auditor, logger)
+	h := handler.NewHandler(repository, cfg.Sign.Key, auditor, cfg.Connection.TrustedSubnet, logger)
 	srv := server.NewServer(cfg, h, logger)
+
+	// start the gRPC server
+	grpcServer := grpc.NewServer(repository, logger)
+	go grpcServer.Serve(ctx, cfg.Connection.GRPCHost, cfg.Connection.TrustedSubnet)
 
 	if err = srv.Serve(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)

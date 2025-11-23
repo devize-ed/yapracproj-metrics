@@ -50,7 +50,7 @@ func TestUpdateHandler(t *testing.T) {
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 
 	r := chi.NewRouter()
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", h.UpdateMetricHandler())
@@ -93,7 +93,7 @@ func TestListAllHandler(t *testing.T) {
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -127,7 +127,7 @@ func TestGetMetricHandler(t *testing.T) {
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -176,7 +176,7 @@ func Example_urlParams() {
 	auditor := audit.NewAuditor(logger, "", "")
 
 	// Initialize handler
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 
 	// Initialize router
 	r := chi.NewRouter()

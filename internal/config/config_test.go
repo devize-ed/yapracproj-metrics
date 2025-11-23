@@ -35,7 +35,7 @@ func TestGetServerConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-i=400", "-f=./non.json", "-d=user:password@/dbname", "-r=true"},
 			expectedConfig: ServerConfig{
-				Connection: ServerConn{Host: "localhost:8081"},
+				Connection: ServerConn{Host: "localhost:8081", GRPCHost: "localhost:3200"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
 						StoreInterval: 500,
@@ -58,7 +58,7 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{"-a=:7070", "-i=400", "-f=./test1.json", "-d=user:password@/dbname", "-r=false", "-k=test2_key"},
 			expectedConfig: ServerConfig{
-				Connection: ServerConn{Host: ":7070"},
+				Connection: ServerConn{Host: ":7070", GRPCHost: "localhost:3200"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
 						StoreInterval: 400,
@@ -81,7 +81,7 @@ func TestGetServerConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: ServerConfig{
-				Connection: ServerConn{Host: "localhost:8080"},
+				Connection: ServerConn{Host: "localhost:8080", GRPCHost: "localhost:3200"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
 						StoreInterval: 300,
@@ -109,7 +109,7 @@ func TestGetServerConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-i=-1", "-f=./non.json", "-d=user:password@/dbname", "-r=false"},
 			expectedConfig: ServerConfig{
-				Connection: ServerConn{Host: ":7070"},
+				Connection: ServerConn{Host: ":7070", GRPCHost: "localhost:3200"},
 				Repository: repo.RepositoryConfig{
 					FSConfig: fs.FStorageConfig{
 						StoreInterval: -1,
@@ -178,7 +178,7 @@ func TestGetAgentConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=10", "-c=false", "-g=false", "-l=5"},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: "localhost:8081"},
+				Connection: AgentConn{Host: "localhost:8081", GRPCHost: "localhost:3200"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 5,
 					PollInterval:   1,
@@ -198,7 +198,7 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{"-a=:7070", "-r=5", "-p=1", "-c=false", "-g=false", "-k=test2_key", "-l=5"},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: ":7070"},
+				Connection: AgentConn{Host: ":7070", GRPCHost: "localhost:3200"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 5,
 					PollInterval:   1,
@@ -218,7 +218,7 @@ func TestGetAgentConfig(t *testing.T) {
 			envVars: map[string]string{},
 			args:    []string{},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: "localhost:8080"},
+				Connection: AgentConn{Host: "localhost:8080", GRPCHost: "localhost:3200"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 10,
 					PollInterval:   2,
@@ -243,7 +243,7 @@ func TestGetAgentConfig(t *testing.T) {
 			},
 			args: []string{"-a=:7070", "-r=30", "-p=-1", "-c=false", "-g=false"},
 			expectedConfig: AgentConfig{
-				Connection: AgentConn{Host: ":7070"},
+				Connection: AgentConn{Host: ":7070", GRPCHost: "localhost:3200"},
 				Agent: agentcfg.AgentConfig{
 					ReportInterval: 30,
 					PollInterval:   -1,

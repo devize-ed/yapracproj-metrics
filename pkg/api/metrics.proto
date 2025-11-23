@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package metrics;
+
+option go_package = "github.com/devize-ed/yapracproj-metrics.git/pkg/api";
+
+
+message Metric {
+  string id = 1; // name of the metric
+
+  // MType sets the type of the metric.
+  enum MType {
+    GAUGE = 0;
+    COUNTER = 1;
+  }
+
+  MType type = 2; // type of the metric
+  // delta field for counter metrics.
+  int64 delta = 3;
+  // value field for gauge metrics.
+double value = 4;
+}
+
+// UpdateMetricsRequest contains a list of metrics to update.
+message UpdateMetricsRequest {
+  repeated Metric metrics = 1;
+}
+
+// UpdateMetricsResponse is an empty response to confirm successful update. 
+message UpdateMetricsResponse {}
+
+// MetricsService defines the service for working with metrics.
+service Metrics {
+  rpc UpdateMetrics(UpdateMetricsRequest) returns (UpdateMetricsResponse);
+}

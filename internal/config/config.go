@@ -25,7 +25,9 @@ type ServerConfig struct {
 
 // ServerConn holds server address configuration.
 type ServerConn struct {
-	Host string `env:"ADDRESS"` // Address of the HTTP server.
+	Host          string `env:"ADDRESS"`   // Address of the HTTP server.
+	GRPCHost      string `env:"GRPC_HOST"` // Host of the gRPC server.
+	TrustedSubnet string `env:"TRUSTED_SUBNET"`
 }
 
 // AgentConfig holds the configuration for the agent.
@@ -38,7 +40,8 @@ type AgentConfig struct {
 
 // AgentConn holds agent connection configuration.
 type AgentConn struct {
-	Host string `env:"ADDRESS"` // Address of the HTTP server.
+	Host     string `env:"ADDRESS"`   // Address of the HTTP server.
+	GRPCHost string `env:"GRPC_HOST"` // Host of the gRPC server.
 }
 
 // GetServerConfig parses environment variables and command-line flags, then returns the server configuration.
@@ -47,6 +50,8 @@ func GetServerConfig() (ServerConfig, error) {
 
 	// Set CLI flags.
 	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address of HTTP server")
+	flag.StringVar(&cfg.Connection.GRPCHost, "grpc-host", "localhost:3200", "address of gRPC server")
+	flag.StringVar(&cfg.Connection.TrustedSubnet, "t", "", "trusted subnet for IP filtering")
 	flag.IntVar(&cfg.Repository.FSConfig.StoreInterval, "i", 300, "store interval in seconds")
 	flag.StringVar(&cfg.Repository.FSConfig.FPath, "f", "", "file path for storing metrics")
 	flag.StringVar(&cfg.Repository.DBConfig.DatabaseDSN, "d", "", "string for the database connection")
@@ -93,6 +98,7 @@ func GetAgentConfig() (AgentConfig, error) {
 	cfg := AgentConfig{}
 
 	flag.StringVar(&cfg.Connection.Host, "a", "localhost:8080", "address and port of the server")
+	flag.StringVar(&cfg.Connection.GRPCHost, "grpc-host", "localhost:3200", "address of gRPC server")
 	flag.IntVar(&cfg.Agent.ReportInterval, "r", 10, "reporting interval in seconds")
 	flag.IntVar(&cfg.Agent.PollInterval, "p", 2, "polling interval in seconds")
 	flag.BoolVar(&cfg.Agent.EnableGzip, "c", true, "enable gzip compression for requests")

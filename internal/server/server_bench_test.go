@@ -20,7 +20,7 @@ func BenchmarkServerCreation(b *testing.B) {
 
 	storage := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
-	handler := handler.NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := handler.NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	cfg := config.ServerConfig{
 		Connection: config.ServerConn{
@@ -42,7 +42,7 @@ func BenchmarkServerShutdown(b *testing.B) {
 
 	storage := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
-	handler := handler.NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := handler.NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	cfg := config.ServerConfig{
 		Connection: config.ServerConn{
@@ -68,7 +68,7 @@ func BenchmarkServerRequestHandling(b *testing.B) {
 
 	storage := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
-	handler := handler.NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := handler.NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	cfg := config.ServerConfig{
 		Connection: config.ServerConn{
@@ -123,7 +123,7 @@ func BenchmarkServerRouterCreation(b *testing.B) {
 
 	storage := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
-	handler := handler.NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := handler.NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {

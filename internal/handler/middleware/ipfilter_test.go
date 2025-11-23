@@ -29,12 +29,11 @@ func TestIPFilterMiddleware(t *testing.T) {
 		_, _ = w.Write([]byte("success"))
 	})
 	router := chi.NewRouter()
-	router.Use(IPFilterMiddleware(IPFilterConfig{TrustedSubnet: trustedSubnet}, logger))
+	router.Use(IPFilterMiddleware(trustedSubnet, logger))
 
 	tests := []struct {
 		name       string
 		ip         string
-		key        string
 		wantStatus int
 		wantBody   string
 	}{

@@ -8,18 +8,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// IPFilterConfig is the configuration for the IP filter middleware.
-type IPFilterConfig struct {
-	TrustedSubnet string `env:"TRUSTED_SUBNET"`
-}
-
 // IPFilterMiddleware is a middleware that filters requests by IP address.
-func IPFilterMiddleware(cfg IPFilterConfig, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
+func IPFilterMiddleware(trustedSubnet string, logger *zap.SugaredLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.Debugf("IP filter middleware with trusted subnet %s", cfg.TrustedSubnet)
+			logger.Debugf("IP filter middleware with trusted subnet %s", trustedSubnet)
 			// If the trusted subnet is not empty, check if the IP address is in the trusted subnet.
-			if cfg.TrustedSubnet != "" {
+			if trustedSubnet != "" {
 				// Get the IP address from the header.
 				ipStr := r.Header.Get("X-Real-IP")
 				if ipStr == "" {
@@ -35,7 +30,7 @@ func IPFilterMiddleware(cfg IPFilterConfig, logger *zap.SugaredLogger) func(http
 					return
 				}
 				// Check if the IP address is in the trusted subnet.
-				ok, err := ipInSubnet(ip, cfg.TrustedSubnet)
+				ok, err := ipInSubnet(ip, trustedSubnet)
 				if err != nil {
 					logger.Debugf("error checking if IP address is in trusted subnet: %w", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
