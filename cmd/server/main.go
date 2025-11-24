@@ -17,7 +17,15 @@ import (
 	"github.com/devize-ed/yapracproj-metrics.git/internal/server"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s", config.GetBuildTag(buildVersion), config.GetBuildTag(buildDate), config.GetBuildTag(buildCommit))
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -55,7 +63,7 @@ func run() error {
 	}()
 
 	// create a context that listens for OS signals to shut down the server
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	// create a new auditor with the logger

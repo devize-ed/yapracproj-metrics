@@ -99,8 +99,12 @@ func BenchmarkGetMetricJSONHandler(b *testing.B) {
 				ctx := context.Background()
 				testGaugeValue := 123.45
 				testCounterValue := int64(100)
-				storage.SetGauge(ctx, "test_gauge", &testGaugeValue)
-				storage.AddCounter(ctx, "test_counter", &testCounterValue)
+				if err := storage.SetGauge(ctx, "test_gauge", &testGaugeValue); err != nil {
+					b.Fatal(err)
+				}
+				if err := storage.AddCounter(ctx, "test_counter", &testCounterValue); err != nil {
+					b.Fatal(err)
+				}
 
 				for pb.Next() {
 					req := httptest.NewRequest("POST", "/value", bytes.NewReader(jsonBody))

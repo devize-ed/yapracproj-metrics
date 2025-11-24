@@ -14,7 +14,15 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s", config.GetBuildTag(buildVersion), config.GetBuildTag(buildDate), config.GetBuildTag(buildCommit))
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +53,7 @@ func run() error {
 	a := agent.NewAgent(client, cfg, logger) // Create a new agent instance.
 
 	// Create a context that listens for OS signals to shut down the agent.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 	// Start the agent to collect and report metrics.
 	if err := a.Run(ctx); err != nil {

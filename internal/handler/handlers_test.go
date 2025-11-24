@@ -46,7 +46,9 @@ func TestUpdateHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
@@ -89,7 +91,9 @@ func TestListAllHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
@@ -123,7 +127,9 @@ func TestGetMetricHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
@@ -165,7 +171,9 @@ func Example_urlParams() {
 	if err != nil {
 		fmt.Println("Error: ", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	// Initialize endpoints
 	endpointCounter := "/update/counter/testCounter/123"

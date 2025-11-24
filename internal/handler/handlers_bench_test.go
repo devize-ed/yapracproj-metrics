@@ -67,8 +67,12 @@ func BenchmarkGetMetricHandler(b *testing.B) {
 	ctx := context.Background()
 	testGaugeValue := 123.45
 	testCounterValue := int64(100)
-	storage.SetGauge(ctx, "test_gauge", &testGaugeValue)
-	storage.AddCounter(ctx, "test_counter", &testCounterValue)
+	if err := storage.SetGauge(ctx, "test_gauge", &testGaugeValue); err != nil {
+		b.Fatal(err)
+	}
+	if err := storage.AddCounter(ctx, "test_counter", &testCounterValue); err != nil {
+		b.Fatal(err)
+	}
 
 	testCases := []struct {
 		name       string
@@ -116,8 +120,12 @@ func BenchmarkListMetricsHandler(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		gaugeValue := float64(i)
 		counterValue := int64(i)
-		storage.SetGauge(ctx, "gauge_"+string(rune(i)), &gaugeValue)
-		storage.AddCounter(ctx, "counter_"+string(rune(i)), &counterValue)
+		if err := storage.SetGauge(ctx, "gauge_"+string(rune(i)), &gaugeValue); err != nil {
+			b.Fatal(err)
+		}
+		if err := storage.AddCounter(ctx, "counter_"+string(rune(i)), &counterValue); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
