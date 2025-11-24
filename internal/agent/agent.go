@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/devize-ed/yapracproj-metrics.git/internal/config"
+	"github.com/devize-ed/yapracproj-metrics.git/internal/grpc/agent"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/encryption"
 	models "github.com/devize-ed/yapracproj-metrics.git/internal/model"
 	"github.com/devize-ed/yapracproj-metrics.git/internal/sign"
@@ -25,10 +26,11 @@ const batchSize = 10
 
 // Agent holds the HTTP client, metric storage, and configuration.
 type Agent struct {
-	client  *resty.Client
-	storage *AgentStorage
-	config  config.AgentConfig
-	logger  *zap.SugaredLogger
+	client     *resty.Client
+	grpcClient *agent.Client
+	storage    *AgentStorage
+	config     config.AgentConfig
+	logger     *zap.SugaredLogger
 }
 
 type jobs struct {
@@ -117,6 +119,19 @@ func (a *Agent) sendMetrics() error {
 
 		// Send metrics as a batch to the server.
 		metrics := a.loadMetrics()
+
+		// Send metrics as a batch to the server using gRPC.
+		if a.grpcClient == nil {
+			a.grpcClient = agent.NewClient(a.config.Connection.GRPCHost, a.logger)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := a.grpcClient.UpdateMetrics(ctx, metrics, batchSize); err != nil {
+			return fmt.Errorf("failed to send gRPC request: %w", err)
+		}
+		a.logger.Debug("Successfully sent metrics via gRPC")
+
+		// Send metrics as a batch to the server.
 		if err := jobs.sendMetricsBatch(a.config.Connection.Host, metrics, a.logger); err != nil {
 			return fmt.Errorf("error sending batch metrics: %w", err)
 		}
@@ -192,7 +207,7 @@ func (a *Agent) loadMetrics() []models.Metrics {
 
 // SendMetricsBatch sends a batch of metrics to the server.
 func (j *jobs) sendMetricsBatch(host string, metrics []models.Metrics, logger *zap.SugaredLogger) error {
-	// Нужно разделить metrics на батчи по N метрик (const) и отправить в jobsQueue
+	// Divide metrics into batches of N metrics (const) and send to jobsQueue
 	for i := 0; i < len(metrics); i += batchSize {
 		batch := metrics[i:min(i+batchSize, len(metrics))]
 
@@ -239,6 +254,7 @@ func getMetric[T MetricValue](request func(name string, endpoint string, bodyByt
 		return fmt.Errorf("error marshalling request body: %w", err)
 	}
 
+	// Send the request to the server.
 	err = request(metric, endpoint, bodyBytes)
 	if err != nil {
 		return fmt.Errorf("failed to send: %w", err)
@@ -295,6 +311,14 @@ func (a *Agent) request(name string, endpoint string, bodyBytes []byte) error {
 
 	a.logger.Debugf("Request body: %s", string(bodyBytes))
 	a.logger.Debugf("Request header: %v", req.Header)
+
+	// Get IP address.
+	ip, err := getIPAddress()
+	if err != nil {
+		return fmt.Errorf("failed to get IP address: %w", err)
+	}
+	// Set the X-Real-IP header.
+	req.SetHeader("X-Real-IP", ip)
 
 	resp, err := req.Post(endpoint)
 	if err != nil {
@@ -357,4 +381,52 @@ func isErrorRetryable(err error) bool {
 	// Check if the error is a network error.
 	var ne net.Error
 	return errors.As(err, &ne)
+}
+
+// getIPAddress gets the IP address from the system.
+func getIPAddress() (string, error) {
+	// Get all network interfaces.
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("failed to get network interfaces: %w", err)
+	}
+
+	// Find the first non-loopback interface with an IPv4 address.
+	for _, iface := range interfaces {
+		// Skip loopback interfaces.
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		// Skip interfaces that are down.
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Skip if not IPv4 or is loopback.
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			// Prefer IPv4 addresses.
+			if ip.To4() != nil {
+				return ip.String(), nil
+			}
+		}
+	}
+
+	// Fallback: if no non-loopback interface found, return localhost.
+	return "127.0.0.1", nil
 }

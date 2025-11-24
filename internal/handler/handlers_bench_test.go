@@ -19,7 +19,7 @@ func BenchmarkUpdateMetricHandler(b *testing.B) {
 
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
 
-	handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	testCases := []struct {
 		name        string
@@ -62,7 +62,7 @@ func BenchmarkGetMetricHandler(b *testing.B) {
 
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
 
-	handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	ctx := context.Background()
 	testGaugeValue := 123.45
@@ -114,7 +114,7 @@ func BenchmarkListMetricsHandler(b *testing.B) {
 
 	auditor := audit.NewAuditor(sugaredLogger, "", "")
 
-	handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+	handler := NewHandler(storage, "test-key", auditor, "", sugaredLogger)
 
 	ctx := context.Background()
 	for i := 0; i < 100; i++ {

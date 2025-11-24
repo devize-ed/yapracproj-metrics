@@ -26,7 +26,7 @@ func TestUpdateJsonHandler(t *testing.T) {
 	endpoint := "/update"
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 
 	r := chi.NewRouter()
 	r.Post(endpoint, h.UpdateMetricJSONHandler())
@@ -84,7 +84,7 @@ func TestHandler_GetMetricJsonHandler(t *testing.T) {
 	endpoint := "/value"
 	ms := mstorage.NewMemStorage()
 	auditor := audit.NewAuditor(logger, "", "")
-	h := NewHandler(ms, "", auditor, logger)
+	h := NewHandler(ms, "", auditor, "", logger)
 	testMemoryStorage(t, ms)
 
 	r := chi.NewRouter()
@@ -157,7 +157,7 @@ func Example_jsonParams() {
 	auditor := audit.NewAuditor(log, "", "")
 
 	// Initialize handler
-	h := NewHandler(ms, "", auditor, log)
+	h := NewHandler(ms, "", auditor, "", log)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -227,7 +227,7 @@ func ExampleHandler_UpdateBatchHandler() {
 	auditor := audit.NewAuditor(log, "", "")
 
 	// Initialize handler
-	h := NewHandler(ms, "", auditor, log)
+	h := NewHandler(ms, "", auditor, "", log)
 
 	// Initialize router
 	r := chi.NewRouter()

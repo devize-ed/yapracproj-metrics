@@ -51,7 +51,7 @@ func BenchmarkUpdateMetricJSONHandler(b *testing.B) {
 				sugaredLogger := logger.Sugar()
 				storage := mstorage.NewMemStorage()
 				auditor := audit.NewAuditor(sugaredLogger, "", "")
-				handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+				handler := NewHandler(storage, "test-key", auditor, "", logger.Sugar())
 
 				for pb.Next() {
 					req := httptest.NewRequest("POST", "/update", bytes.NewReader(jsonBody))
@@ -93,7 +93,7 @@ func BenchmarkGetMetricJSONHandler(b *testing.B) {
 				sugaredLogger := logger.Sugar()
 				storage := mstorage.NewMemStorage()
 				auditor := audit.NewAuditor(sugaredLogger, "", "")
-				handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+				handler := NewHandler(storage, "test-key", auditor, "", logger.Sugar())
 
 				// Pre-populate storage with test data
 				ctx := context.Background()
@@ -147,7 +147,7 @@ func BenchmarkUpdateBatchHandler(b *testing.B) {
 		sugaredLogger := logger.Sugar()
 		storage := mstorage.NewMemStorage()
 		auditor := audit.NewAuditor(sugaredLogger, "", "")
-		handler := NewHandler(storage, "test-key", auditor, sugaredLogger)
+		handler := NewHandler(storage, "test-key", auditor, "", logger.Sugar())
 
 		for pb.Next() {
 			req := httptest.NewRequest("POST", "/updates", bytes.NewReader(jsonBody))
