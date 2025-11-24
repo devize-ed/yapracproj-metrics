@@ -57,7 +57,8 @@ type AgentConn struct {
 func defaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Connection: ServerConn{
-			Host: "localhost:8080",
+			Host:     "localhost:8080",
+			GRPCHost: "localhost:3200",
 		},
 		Repository: repository.RepositoryConfig{
 			FSConfig: fs.FStorageConfig{
@@ -80,7 +81,8 @@ func defaultServerConfig() ServerConfig {
 func defaultAgentConfig() AgentConfig {
 	return AgentConfig{
 		Connection: AgentConn{
-			Host: "localhost:8080",
+			Host:     "localhost:8080",
+			GRPCHost: "localhost:3200",
 		},
 		Agent: agent.AgentConfig{
 			PollInterval:   2,
@@ -106,6 +108,8 @@ type envBinding struct {
 // bind environment variables to server config
 var serverEnv = []envBinding{
 	{"connection.host", "ADDRESS", "string"},
+	{"connection.grpc_host", "GRPC_HOST", "string"},
+	{"connection.trusted_subnet", "TRUSTED_SUBNET", "string"},
 	{"repository.fs.store_interval", "STORE_INTERVAL", "int"},
 	{"repository.fs.file_storage_path", "FILE_STORAGE_PATH", "string"},
 	{"repository.fs.restore", "RESTORE", "bool"},
@@ -120,6 +124,7 @@ var serverEnv = []envBinding{
 // bind environment variables to agent config
 var agentEnv = []envBinding{
 	{"connection.host", "ADDRESS", "string"},
+	{"connection.grpc_host", "GRPC_HOST", "string"},
 	{"agent.report_interval", "REPORT_INTERVAL", "int"},
 	{"agent.poll_interval", "POLL_INTERVAL", "int"},
 	{"agent.enable_gzip", "ENABLE_GZIP", "bool"},
@@ -161,6 +166,8 @@ func bindEnvAndElevate(v *viper.Viper, bindings []envBinding) error {
 func mapServerFlagToKey(flagName string) string {
 	flagMap := map[string]string{
 		"a":          "connection.host",
+		"grpc-host":  "connection.grpc_host",
+		"t":          "connection.trusted_subnet",
 		"i":          "repository.fs.store_interval",
 		"f":          "repository.fs.file_storage_path",
 		"d":          "repository.db.database_dsn",
@@ -180,6 +187,7 @@ func mapServerFlagToKey(flagName string) string {
 func mapAgentFlagToKey(flagName string) string {
 	flagMap := map[string]string{
 		"a":          "connection.host",
+		"grpc-host":  "connection.grpc_host",
 		"r":          "agent.report_interval",
 		"p":          "agent.poll_interval",
 		"gzip":       "agent.enable_gzip",
@@ -229,6 +237,8 @@ func setServerDefaults(v *viper.Viper) {
 	d := defaultServerConfig()
 	// set the default values
 	v.SetDefault("connection.host", d.Connection.Host)
+	v.SetDefault("connection.grpc_host", d.Connection.GRPCHost)
+	v.SetDefault("connection.trusted_subnet", d.Connection.TrustedSubnet)
 	v.SetDefault("repository.fs.store_interval", d.Repository.FSConfig.StoreInterval)
 	v.SetDefault("repository.fs.file_storage_path", d.Repository.FSConfig.FPath)
 	v.SetDefault("repository.fs.restore", d.Repository.FSConfig.Restore)
@@ -246,6 +256,7 @@ func setAgentDefaults(v *viper.Viper) {
 	d := defaultAgentConfig()
 	// set the default values
 	v.SetDefault("connection.host", d.Connection.Host)
+	v.SetDefault("connection.grpc_host", d.Connection.GRPCHost)
 	v.SetDefault("agent.report_interval", d.Agent.ReportInterval)
 	v.SetDefault("agent.poll_interval", d.Agent.PollInterval)
 	v.SetDefault("agent.enable_gzip", d.Agent.EnableGzip)
@@ -266,13 +277,23 @@ func GetServerConfig() (ServerConfig, error) {
 	// set the default values
 	setServerDefaults(v)
 
+	// Track which keys were explicitly set
+	explicitlySet := make(map[string]bool)
+
 	// read the config file if provided
+	configFileKeys := make(map[string]bool)
 	if p := getConfigPath(); p != "" {
 		// set the config file path
 		v.SetConfigFile(p)
 		// read the config file
 		if err := v.ReadInConfig(); err != nil {
 			return cfg, fmt.Errorf("load config file %q: %w", p, err)
+		}
+		// Track keys that were set in the config file
+		for _, key := range v.AllKeys() {
+			if v.IsSet(key) {
+				configFileKeys[key] = true
+			}
 		}
 	}
 
@@ -282,6 +303,8 @@ func GetServerConfig() (ServerConfig, error) {
 	fs.StringP("config", "c", "", "path to config file")
 
 	fs.StringP("a", "a", v.GetString("connection.host"), "address of HTTP server")
+	fs.String("grpc-host", v.GetString("connection.grpc_host"), "address of gRPC server")
+	fs.StringP("t", "t", v.GetString("connection.trusted_subnet"), "trusted subnet for IP filtering")
 	fs.IntP("i", "i", v.GetInt("repository.fs.store_interval"), "store interval, s")
 	fs.StringP("f", "f", v.GetString("repository.fs.file_storage_path"), "file storage path")
 	fs.StringP("d", "d", v.GetString("repository.db.database_dsn"), "database DSN")
@@ -295,9 +318,11 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := fs.Parse(os.Args[1:]); err != nil && err != pflag.ErrHelp {
 		return cfg, fmt.Errorf("parse server flags: %w", err)
 	}
+
 	// check if the flag was explicitly set
 	fs.Visit(func(f *pflag.Flag) {
 		key := mapServerFlagToKey(f.Name)
+		explicitlySet[key] = true
 		switch f.Value.Type() {
 		case "string":
 			v.Set(key, f.Value.String())
@@ -317,10 +342,17 @@ func GetServerConfig() (ServerConfig, error) {
 	if err := bindEnvAndElevate(v, serverEnv); err != nil {
 		return cfg, fmt.Errorf("parse server envs: %w", err)
 	}
+	// Track env vars that were set
+	for _, b := range serverEnv {
+		if val, ok := os.LookupEnv(b.Env); ok && val != "" {
+			explicitlySet[b.Key] = true
+		}
+	}
 	// Special case: allow empty DATABASE_DSN override when CONFIG comes from env
 	if loadedFromEnv {
 		if dsnVal, ok := os.LookupEnv("DATABASE_DSN"); ok {
 			v.Set("repository.db.database_dsn", dsnVal)
+			explicitlySet["repository.db.database_dsn"] = true
 		}
 	}
 
@@ -330,6 +362,14 @@ func GetServerConfig() (ServerConfig, error) {
 	})
 	if err := v.Unmarshal(&cfg, decoderOpt); err != nil {
 		return cfg, fmt.Errorf("unmarshal server config: %w", err)
+	}
+
+	// Apply defaults for fields that weren't set explicitly (not in file, flags, or env)
+	if cfg.Connection.GRPCHost == "" && !explicitlySet["connection.grpc_host"] && !configFileKeys["connection.grpc_host"] {
+		cfg.Connection.GRPCHost = v.GetString("connection.grpc_host")
+	}
+	if cfg.Connection.TrustedSubnet == "" && !explicitlySet["connection.trusted_subnet"] && !configFileKeys["connection.trusted_subnet"] {
+		cfg.Connection.TrustedSubnet = v.GetString("connection.trusted_subnet")
 	}
 
 	// validate the server config
@@ -356,13 +396,23 @@ func GetAgentConfig() (AgentConfig, error) {
 	// set the default values
 	setAgentDefaults(v)
 
+	// Track which keys were explicitly set
+	explicitlySet := make(map[string]bool)
+
 	// read the config file if provided
+	configFileKeys := make(map[string]bool)
 	if p := getConfigPath(); p != "" {
 		// set the config file path
 		v.SetConfigFile(p)
 		// read the config file
 		if err := v.ReadInConfig(); err != nil {
 			return cfg, fmt.Errorf("load config file %q: %w", p, err)
+		}
+		// Track keys that were set in the config file
+		for _, key := range v.AllKeys() {
+			if v.IsSet(key) {
+				configFileKeys[key] = true
+			}
 		}
 	}
 
@@ -372,6 +422,7 @@ func GetAgentConfig() (AgentConfig, error) {
 	fs.StringP("config", "c", "", "path to config file")
 
 	fs.StringP("a", "a", v.GetString("connection.host"), "address of HTTP server")
+	fs.String("grpc-host", v.GetString("connection.grpc_host"), "address of gRPC server")
 	fs.IntP("r", "r", v.GetInt("agent.report_interval"), "reporting interval, s")
 	fs.IntP("p", "p", v.GetInt("agent.poll_interval"), "polling interval, s")
 	fs.Bool("gzip", v.GetBool("agent.enable_gzip"), "enable gzip")
@@ -384,9 +435,11 @@ func GetAgentConfig() (AgentConfig, error) {
 	if err := fs.Parse(os.Args[1:]); err != nil && err != pflag.ErrHelp {
 		return cfg, fmt.Errorf("parse agent flags: %w", err)
 	}
+
 	// check if the flag was explicitly set
 	fs.Visit(func(f *pflag.Flag) {
 		key := mapAgentFlagToKey(f.Name)
+		explicitlySet[key] = true
 		switch f.Value.Type() {
 		case "string":
 			v.Set(key, f.Value.String())
@@ -405,6 +458,12 @@ func GetAgentConfig() (AgentConfig, error) {
 	if err := bindEnvAndElevate(v, agentEnv); err != nil {
 		return cfg, fmt.Errorf("parse agent envs: %w", err)
 	}
+	// Track env vars that were set
+	for _, b := range agentEnv {
+		if val, ok := os.LookupEnv(b.Env); ok && val != "" {
+			explicitlySet[b.Key] = true
+		}
+	}
 
 	// unmarshal the viper instance into the agent config
 	decoderOpt := viper.DecoderConfigOption(func(dc *mapstructure.DecoderConfig) {
@@ -412,6 +471,11 @@ func GetAgentConfig() (AgentConfig, error) {
 	})
 	if err := v.Unmarshal(&cfg, decoderOpt); err != nil {
 		return cfg, fmt.Errorf("unmarshal agent: %w", err)
+	}
+
+	// Apply defaults for fields that weren't set explicitly (not in file, flags, or env)
+	if cfg.Connection.GRPCHost == "" && !explicitlySet["connection.grpc_host"] && !configFileKeys["connection.grpc_host"] {
+		cfg.Connection.GRPCHost = v.GetString("connection.grpc_host")
 	}
 
 	// validate the agent config
